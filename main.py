@@ -28,6 +28,9 @@ use_cuda = torch.cuda.is_available()
 best_acc = 0  # best test accuracy
 start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 
+# count how many gpus we're working with here
+n_gpus = torch.cuda.device_count()
+
 # Data
 print('==> Preparing data..')
 transform_train = transforms.Compose([
@@ -72,7 +75,7 @@ checkpoint_loc = os.path.join(data_save_loc, 'checkpoint')
 
 def save_checkpoint(net, acc, epoch):
     state = {
-        'net': net.module if use_cuda else net,
+        'net': net,
         'acc': acc,
         'epoch': epoch,
     }
@@ -92,7 +95,6 @@ else:
     net = VGG('VGG16')
     if use_cuda:
         net.cuda()
-        net = torch.nn.DataParallel(net, device_ids=range(torch.cuda.device_count()))
     # net = ResNet18()
     # net = GoogLeNet()
     # net = DenseNet121()
@@ -110,7 +112,6 @@ def unpack_ckpt(checkpoint):
 
     if use_cuda:
         net.cuda()
-        net = torch.nn.DataParallel(net, device_ids=range(torch.cuda.device_count()))
         cudnn.benchmark = True
 
     criterion = nn.CrossEntropyLoss()
