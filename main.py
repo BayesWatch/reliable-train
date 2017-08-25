@@ -54,9 +54,8 @@ class PartialDataset(torch.utils.data.Dataset):
     def __getitem__(self, i):
         return self.parent_ds[i+self.offset]
 
-print(args.data)
 data_save_loc = os.path.join(args.data, 'data')
-print(data_save_loc)
+print("Saving data and checkpoints to: %s"%data_save_loc)
 trainvalset = torchvision.datasets.CIFAR10(root=data_save_loc, train=True, download=True, transform=transform_train)
 trainset = PartialDataset(trainvalset, 0, 40000)
 trainloader = torch.utils.data.DataLoader(trainset, batch_size=128, shuffle=True, num_workers=2)
@@ -69,18 +68,31 @@ testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False,
 
 classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
-# Model
+checkpoint_loc = os.path.join(args.data, 'checkpoint')
+
+def save_checkpoint(net, acc, epoch):
+    state = {
+        'net': net.module if use_cuda else net,
+        'acc': acc,
+        'epoch': epoch,
+    }
+
+    if not os.path.isdir(checkpoint_loc):
+        os.mkdir(checkpoint_loc)
+    torch.save(state, os.path.join(checkpoint_loc,'ckpt.t7'))
+    return state
+
+# Make an initial checkpoint if we don't have one
 if args.resume:
-    # Load checkpoint.
     print('==> Resuming from checkpoint..')
-    assert os.path.isdir('checkpoint'), 'Error: no checkpoint directory found!'
-    checkpoint = torch.load('./checkpoint/ckpt.t7')
-    net = checkpoint['net']
-    best_acc = checkpoint['acc']
-    start_epoch = checkpoint['epoch']
+    assert os.path.isdir(checkpoint_loc)
+    checkpoint = torch.load(os.path.join(checkpoint_loc, 'ckpt.t7'))
 else:
     print('==> Building model..')
     net = VGG('VGG16')
+    if use_cuda:
+        net.cuda()
+        net = torch.nn.DataParallel(net, device_ids=range(torch.cuda.device_count()))
     # net = ResNet18()
     # net = GoogLeNet()
     # net = DenseNet121()
@@ -89,17 +101,27 @@ else:
     # net = DPN92()
     # net = ShuffleNetG2()
     # net = SENet18()
+    checkpoint = save_checkpoint(net, 0.0, 0)
 
-if use_cuda:
-    net.cuda()
-    net = torch.nn.DataParallel(net, device_ids=range(torch.cuda.device_count()))
-    cudnn.benchmark = True
+def unpack_ckpt(checkpoint):
+    net = checkpoint['net']
+    best_acc = checkpoint['acc']
+    start_epoch = checkpoint['epoch']
 
-criterion = nn.CrossEntropyLoss()
-optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
+    if use_cuda:
+        net.cuda()
+        net = torch.nn.DataParallel(net, device_ids=range(torch.cuda.device_count()))
+        cudnn.benchmark = True
+
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
+
+    return net, best_acc, start_epoch, criterion, optimizer
 
 # Training
-def train(epoch):
+def train(epoch, checkpoint):
+    net, best_acc, start_epoch, criterion, optimizer = unpack_ckpt(checkpoint)
+    
     print('\nEpoch: %d' % epoch)
     net.train()
     train_loss = 0
@@ -123,8 +145,10 @@ def train(epoch):
         progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
             % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
 
-def validate(epoch):
+def validate(epoch, checkpoint):
     global best_acc
+    net, best_acc, start_epoch, criterion, optimizer = unpack_ckpt(checkpoint)
+
     net.eval()
     test_loss = 0
     correct = 0
@@ -148,15 +172,7 @@ def validate(epoch):
     acc = 100.*correct/total
     if acc > best_acc:
         print('Saving..')
-        state = {
-            'net': net.module if use_cuda else net,
-            'acc': acc,
-            'epoch': epoch,
-        }
-        checkpoint_loc = os.path.join(args.data, 'checkpoint')
-        if not os.path.isdir(checkpoint_loc):
-            os.mkdir(checkpoint_loc)
-        torch.save(state, os.path.join(checkpoint_loc,'ckpt.t7'))
+        save_checkpoint(net, acc, epoch)
         best_acc = acc
 
 def test(epoch):
@@ -183,5 +199,5 @@ def test(epoch):
 
 
 for epoch in range(start_epoch, start_epoch+200):
-    train(epoch)
-    validate(epoch)
+    train(epoch, checkpoint)
+    validate(epoch, checkpoint)
