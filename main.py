@@ -14,9 +14,9 @@ import os
 import argparse
 
 from models import *
-from utils import progress_bar
 from torch.autograd import Variable
 
+import learn
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
@@ -73,18 +73,6 @@ classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship'
 
 checkpoint_loc = os.path.join(data_save_loc, 'checkpoint')
 
-def save_checkpoint(net, acc, epoch):
-    state = {
-        'net': net,
-        'acc': acc,
-        'epoch': epoch,
-    }
-
-    if not os.path.isdir(checkpoint_loc):
-        os.mkdir(checkpoint_loc)
-    torch.save(state, os.path.join(checkpoint_loc,'ckpt.t7'))
-    return state
-
 # Make an initial checkpoint if we don't have one
 if args.resume:
     print('==> Resuming from checkpoint..')
@@ -103,102 +91,8 @@ else:
     # net = DPN92()
     # net = ShuffleNetG2()
     # net = SENet18()
-    checkpoint = save_checkpoint(net, 0.0, 0)
-
-def unpack_ckpt(checkpoint):
-    net = checkpoint['net']
-    best_acc = checkpoint['acc']
-    start_epoch = checkpoint['epoch']
-
-    if use_cuda:
-        net.cuda()
-        cudnn.benchmark = True
-
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
-
-    return net, best_acc, start_epoch, criterion, optimizer
-
-# Training
-def train(epoch, checkpoint):
-    net, best_acc, start_epoch, criterion, optimizer = unpack_ckpt(checkpoint)
-    
-    print('\nEpoch: %d' % epoch)
-    net.train()
-    train_loss = 0
-    correct = 0
-    total = 0
-    for batch_idx, (inputs, targets) in enumerate(trainloader):
-        if use_cuda:
-            inputs, targets = inputs.cuda(), targets.cuda()
-        optimizer.zero_grad()
-        inputs, targets = Variable(inputs), Variable(targets)
-        outputs = net(inputs)
-        loss = criterion(outputs, targets)
-        loss.backward()
-        optimizer.step()
-
-        train_loss += loss.data[0]
-        _, predicted = torch.max(outputs.data, 1)
-        total += targets.size(0)
-        correct += predicted.eq(targets.data).cpu().sum()
-
-        progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
-            % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
-
-def validate(epoch, checkpoint):
-    global best_acc
-    net, best_acc, start_epoch, criterion, optimizer = unpack_ckpt(checkpoint)
-
-    net.eval()
-    test_loss = 0
-    correct = 0
-    total = 0
-    for batch_idx, (inputs, targets) in enumerate(valloader):
-        if use_cuda:
-            inputs, targets = inputs.cuda(), targets.cuda()
-        inputs, targets = Variable(inputs, volatile=True), Variable(targets)
-        outputs = net(inputs)
-        loss = criterion(outputs, targets)
-
-        test_loss += loss.data[0]
-        _, predicted = torch.max(outputs.data, 1)
-        total += targets.size(0)
-        correct += predicted.eq(targets.data).cpu().sum()
-
-        progress_bar(batch_idx, len(valloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
-            % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
-
-    # Save checkpoint.
-    acc = 100.*correct/total
-    if acc > best_acc:
-        print('Saving..')
-        save_checkpoint(net, acc, epoch)
-        best_acc = acc
-
-def test(epoch):
-    global best_acc
-    net.eval()
-    test_loss = 0
-    correct = 0
-    total = 0
-    for batch_idx, (inputs, targets) in enumerate(testloader):
-        if use_cuda:
-            inputs, targets = inputs.cuda(), targets.cuda()
-        inputs, targets = Variable(inputs, volatile=True), Variable(targets)
-        outputs = net(inputs)
-        loss = criterion(outputs, targets)
-
-        test_loss += loss.data[0]
-        _, predicted = torch.max(outputs.data, 1)
-        total += targets.size(0)
-        correct += predicted.eq(targets.data).cpu().sum()
-
-        progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
-            % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
-
-
+    checkpoint = learn.save_checkpoint(checkpoint_loc, net, 0.0, 0)
 
 for epoch in range(start_epoch, start_epoch+200):
-    train(epoch, checkpoint)
-    validate(epoch, checkpoint)
+    learn.train(epoch, checkpoint, trainloader, args.lr)
+    best_acc = learn.validate(epoch, checkpoint, valloader, checkpoint_loc)
