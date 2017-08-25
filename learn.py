@@ -2,6 +2,7 @@
 from __future__ import print_function
 
 import os
+from concurrent.futures import ThreadPoolExecutor
 
 import torch
 import torch.nn as nn
@@ -38,38 +39,54 @@ def save_checkpoint(checkpoint_loc, net, acc, epoch):
     return state
 
 # Training
-def train(epoch, checkpoint, trainloader, lr, gpu_idx):
+def train(epoch, checkpoints, trainloader, lr):
     use_cuda = torch.cuda.is_available()
-    net, best_acc, start_epoch = unpack_ckpt(checkpoint, gpu_idx)
+    for gpu_idx, checkpoint in enumerate(checkpoints):
+        net, best_acc, start_epoch = unpack_ckpt(checkpoint, gpu_idx)
+        net.train()
 
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(net.parameters(), lr=lr, momentum=0.9, weight_decay=5e-4)
+        criterion = nn.CrossEntropyLoss()
+        optimizer = optim.SGD(net.parameters(), lr=lr, momentum=0.9, weight_decay=5e-4)
+        checkpoint.update({'criterion': criterion, 'optimizer':optimizer, 'gpu_idx':gpu_idx})
+        checkpoint['correct'] = 0
+        checkpoint['total'] = 0
 
-    print('\nEpoch: %d' % (epoch+start_epoch))
-    net.train()
-    train_loss = 0
-    correct = 0
-    total = 0
     for batch_idx, (inputs, targets) in enumerate(trainloader):
-        if use_cuda:
-            inputs, targets = inputs.cuda(gpu_idx), targets.cuda(gpu_idx)
-        optimizer.zero_grad()
-        inputs, targets = Variable(inputs), Variable(targets)
-        outputs = net(inputs)
-        loss = criterion(outputs, targets)
-        loss.backward()
-        optimizer.step()
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            propagate_this = lambda ckpt: propagate(ckpt, inputs, targets)
+            results = executor.map(propagate_this, checkpoints)
+        #results = []
+        #for checkpoint in checkpoints:
+        #    checkpoint, train_loss = propagate(checkpoint, inputs, targets)
+        #    results.append((checkpoint, train_loss))
+        progress_str = ''
+        for checkpoint, train_loss in results:
+            correct, total = checkpoint['correct'], checkpoint['total']
+            progress_str += '| Loss: %.3f | Acc: %.3f%% (%d/%d) |'\
+                % (train_loss, 100.*correct/total, correct, total)
+        progress_bar(batch_idx, len(trainloader), progress_str)
+    return None
 
-        train_loss += loss.data[0]
-        _, predicted = torch.max(outputs.data, 1)
-        total += targets.size(0)
-        correct += predicted.eq(targets.data).cpu().sum()
+def propagate(checkpoint, inputs, targets):
+    gpu_idx = checkpoint['gpu_idx']
+    use_cuda = torch.cuda.is_available()
+    if use_cuda:
+        inputs, targets = inputs.cuda(gpu_idx), targets.cuda(gpu_idx)
+    checkpoint['optimizer'].zero_grad()
+    inputs, targets = Variable(inputs), Variable(targets)
+    outputs = checkpoint['net'](inputs)
+    loss = checkpoint['criterion'](outputs, targets)
+    loss.backward()
+    checkpoint['optimizer'].step()
 
-        #progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
-        #    % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
-    return 100.*correct/total
+    train_loss = loss.data[0]
+    _, predicted = torch.max(outputs.data, 1)
+    checkpoint['total'] += targets.size(0)
+    checkpoint['correct'] += predicted.eq(targets.data).cpu().sum()
 
-def validate(epoch, checkpoint, valloader, checkpoint_loc, gpu_idx):
+    return checkpoint, train_loss
+
+def validate(epoch, checkpoints, valloader, checkpoint_loc):
     use_cuda = torch.cuda.is_available()
     net, best_acc, start_epoch = unpack_ckpt(checkpoint, gpu_idx)
 

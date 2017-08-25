@@ -26,7 +26,6 @@ args = parser.parse_args()
 
 use_cuda = torch.cuda.is_available()
 best_acc = 0  # best test accuracy
-start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 
 # count how many gpus we're working with here
 n_gpus = torch.cuda.device_count()
@@ -93,6 +92,13 @@ else:
     # net = SENet18()
     checkpoint = learn.save_checkpoint(checkpoint_loc, net, 0.0, 0)
 
-for epoch in range(start_epoch, start_epoch+200):
-    learn.train(epoch, checkpoint, trainloader, args.lr)
-    best_acc = learn.validate(epoch, checkpoint, valloader, checkpoint_loc)
+checkpoints = []
+for i in range(2):
+    net = VGG('VGG16')
+    checkpoint = learn.save_checkpoint(checkpoint_loc, net, 0.0, 0)
+    checkpoints.append(checkpoint)
+
+for epoch in range(200):
+    learn.train(epoch, checkpoints, trainloader, args.lr)
+    assert False
+    best_acc = learn.validate(epoch, checkpoints, valloader, checkpoint_loc)
