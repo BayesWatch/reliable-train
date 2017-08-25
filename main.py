@@ -68,7 +68,7 @@ testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False,
 
 classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
-checkpoint_loc = os.path.join(args.data, 'checkpoint')
+checkpoint_loc = os.path.join(data_save_loc, 'checkpoint')
 
 def save_checkpoint(net, acc, epoch):
     state = {
