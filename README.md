@@ -2,6 +2,15 @@
 
 I'm playing with [PyTorch](http://pytorch.org/) on the CIFAR10 dataset.
 
+# DICE Setup
+
+Export `SCRATCH` as a environment variable before running to choose where
+to save data and intermediate models:
+
+```
+export SCRATCH=<somewhere on scratch like /disk/scratch/you>
+```
+
 ## Pros & cons
 Pros:
 - Built-in data loading and augmentation, very nice!
