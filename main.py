@@ -19,9 +19,11 @@ from torch.autograd import Variable
 import learn
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
-parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
+parser.add_argument('--lr', default=0.1, type=float, help='initial learning rate')
+parser.add_argument('--schedule_period', default=30, type=float, help='learning rate schedule period')
 parser.add_argument('--resume', '-r', action='store_true', help='resume from checkpoint')
 parser.add_argument('--data', '-d', default=os.environ.get('SCRATCH',os.getcwd()), help='place to store data')
+parser.add_argument('--sgdr', action='store_true', help='use the SGDR learning rate schedule')
 args = parser.parse_args()
 
 use_cuda = torch.cuda.is_available()
@@ -98,7 +100,15 @@ for i in range(2):
     checkpoint = learn.save_checkpoint(checkpoint_loc, net, 0.0, 0)
     checkpoints.append(checkpoint)
 
+period = args.schedule_period*len(trainloader)
+if not args.sgdr:
+    print("Using standard two step learning rate schedule with period %i minibatches."%period)
+    lr_schedule = lambda batch_idx: learn.standard_schedule(period, batch_idx)
+else:
+    print("Using SGDR with period %i minibatches."%period)
+    lr_schedule = lambda batch_idx: learn.sgdr(period, batch_idx)
+
 for epoch in range(200):
-    learn.train(epoch, checkpoints, trainloader, args.lr)
+    learn.train(epoch, checkpoints, trainloader, args.lr, lr_schedule)
     assert False
     best_acc = learn.validate(epoch, checkpoints, valloader, checkpoint_loc)
