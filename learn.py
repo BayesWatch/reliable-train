@@ -71,7 +71,7 @@ def train(epoch, checkpoints, trainloader, lr, lr_schedule):
         net.train()
 
         # set up learning rate callback
-        current_batch = len(trainloader) * start_epoch
+        current_batch = len(trainloader) * (start_epoch+epoch)
         checkpoint['lr_schedule_callback'] = lambda batch_idx: lr*lr_schedule(batch_idx+current_batch)
 
         criterion = nn.CrossEntropyLoss()
@@ -88,19 +88,19 @@ def train(epoch, checkpoints, trainloader, lr, lr_schedule):
 
             progress_str = ''
             for checkpoint, train_loss in results:
-                correct, total = checkpoint['correct'], checkpoint['total']
-                progress_str += '| Loss: %.3f | Acc: %.3f%% (%d/%d) |'\
-                    % (train_loss, 100.*correct/total, correct, total)
+                correct, total, lr = checkpoint['correct'], checkpoint['total'], checkpoint['recent_lr']
+                progress_str += '| Loss: %.3f | Acc: %.3f%% (%d/%d) | LR: %.3f |'\
+                    % (train_loss, 100.*correct/total, correct, total, lr)
             progress_bar(batch_idx, len(trainloader), progress_str)
     return None
 
 def propagate(checkpoint, inputs, targets, batch_idx):
     gpu_idx = checkpoint['gpu_idx']
     use_cuda = torch.cuda.is_available()
-    lr = checkpoint['lr_schedule_callback'](batch_idx)
+    checkpoint['recent_lr'] = checkpoint['lr_schedule_callback'](batch_idx)
     if use_cuda:
         inputs, targets = inputs.cuda(gpu_idx), targets.cuda(gpu_idx)
-    checkpoint['optimizer'] = set_optimizer_lr(checkpoint['optimizer'], lr)
+    checkpoint['optimizer'] = set_optimizer_lr(checkpoint['optimizer'], checkpoint['recent_lr'])
     checkpoint['optimizer'].zero_grad()
     inputs, targets = Variable(inputs), Variable(targets)
     outputs = checkpoint['net'](inputs)

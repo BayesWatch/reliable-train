@@ -110,5 +110,5 @@ else:
 
 for epoch in range(200):
     learn.train(epoch, checkpoints, trainloader, args.lr, lr_schedule)
-    assert False
-    best_acc = learn.validate(epoch, checkpoints, valloader, checkpoint_loc)
+    #assert False
+    #best_acc = learn.validate(epoch, checkpoints, valloader, checkpoint_loc)
