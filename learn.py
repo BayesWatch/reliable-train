@@ -61,7 +61,7 @@ def sgdr(period, batch_idx):
 def standard_schedule(period, batch_idx):
     # returns multiplier for current batch according to the standard two step schedule
     batch_idx, period = float(batch_idx), float(period)
-    return 1.*math.floor(batch_idx/period)
+    return 0.1**math.floor(batch_idx/period)
 
 # Training
 def train(epoch, checkpoints, trainloader, lr, lr_schedule):
@@ -72,7 +72,7 @@ def train(epoch, checkpoints, trainloader, lr, lr_schedule):
 
         # set up learning rate callback
         current_batch = len(trainloader) * (start_epoch+epoch)
-        checkpoint['lr_schedule_callback'] = lambda batch_idx: lr*lr_schedule(batch_idx+current_batch)
+        checkpoint['lr_schedule_callback'] = lambda x: lr*lr_schedule(x+current_batch)
 
         criterion = nn.CrossEntropyLoss()
         optimizer = optim.SGD(net.parameters(), lr=lr, momentum=0.9, weight_decay=5e-4)
@@ -88,9 +88,9 @@ def train(epoch, checkpoints, trainloader, lr, lr_schedule):
 
             progress_str = ''
             for checkpoint, train_loss in results:
-                correct, total, lr = checkpoint['correct'], checkpoint['total'], checkpoint['recent_lr']
+                correct, total, recent_lr = checkpoint['correct'], checkpoint['total'], checkpoint['recent_lr']
                 progress_str += '| Loss: %.3f | Acc: %.3f%% (%d/%d) | LR: %.3f |'\
-                    % (train_loss, 100.*correct/total, correct, total, lr)
+                    % (train_loss, 100.*correct/total, correct, total, recent_lr)
             progress_bar(batch_idx, len(trainloader), progress_str)
     return None
 
