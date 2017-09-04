@@ -118,5 +118,5 @@ else:
     lr_schedule = lambda batch_idx: learn.sgdr(period, batch_idx)
 
 for epoch in range(200):
-    learn.train(epoch, checkpoints, trainloader, args.lr, lr_schedule)
-    learn.validate(epoch, checkpoints, valloader, checkpoint_loc, save=True)
+    learn.train(checkpoints, trainloader, args.lr, lr_schedule)
+    learn.validate(checkpoints, valloader, checkpoint_loc, save=True)

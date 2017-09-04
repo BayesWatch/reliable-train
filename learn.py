@@ -65,14 +65,14 @@ def standard_schedule(period, batch_idx):
     return 0.1**math.floor(batch_idx/period)
 
 # Training
-def train(epoch, checkpoints, trainloader, lr, lr_schedule):
+def train(checkpoints, trainloader, lr, lr_schedule):
     use_cuda = torch.cuda.is_available()
     for gpu_idx, checkpoint in enumerate(checkpoints):
         net, best_acc, start_epoch = unpack_ckpt(checkpoint, gpu_idx)
         net.train()
 
         # set up learning rate callback
-        current_batch = len(trainloader) * (start_epoch+epoch)
+        current_batch = len(trainloader) * start_epoch
         checkpoint['lr_schedule_callback'] = lambda x: lr*lr_schedule(x+current_batch)
 
         criterion = nn.CrossEntropyLoss()
@@ -93,6 +93,8 @@ def train(epoch, checkpoints, trainloader, lr, lr_schedule):
                 progress_str += '| Loss: %.3f | Acc: %.3f%% (%d/%d) | LR: %.3f |'\
                     % (train_loss, 100.*correct/total, correct, total, recent_lr)
             progress_bar(batch_idx, len(trainloader), progress_str)
+    checkpoint['epoch'] += 1
+    # return nothing because we're doing epochs in place, urgh
     return None
 
 def propagate(checkpoint, inputs, targets, batch_idx, update=False):
@@ -120,7 +122,7 @@ def propagate(checkpoint, inputs, targets, batch_idx, update=False):
 
     return checkpoint, loss
 
-def validate(epoch, checkpoints, valloader, checkpoint_loc, save=False):
+def validate(checkpoints, valloader, checkpoint_loc, save=False):
     use_cuda = torch.cuda.is_available()
     for gpu_idx, checkpoint in enumerate(checkpoints):
         net, best_acc, start_epoch = unpack_ckpt(checkpoint, gpu_idx)
