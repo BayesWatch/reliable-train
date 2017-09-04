@@ -86,7 +86,8 @@ else:
         print('==> Building model %i..'%(i+1))
         net = VGG('VGG16')
         checkpoint = learn.save_checkpoint(checkpoint_loc, net, 0.0, 0, args.lr, period)
-        checkpoint['recent_period'] = period
+        checkpoint['period'] = period
+        checkpoint['init_lr'] = args.lr
         checkpoints.append(checkpoint)
 
 if not args.sgdr:

@@ -141,17 +141,17 @@ def validate(epoch, checkpoints, valloader, checkpoint_loc, save=False):
 
             progress_str = ''
             for checkpoint, test_loss in results:
-                correct, total, recent_lr = checkpoint['correct'], checkpoint['total'], checkpoint['recent_lr']
+                correct, total = checkpoint['correct'], checkpoint['total']
                 progress_str += '| Loss: %.3f | Acc: %.3f%% (%d/%d) |'\
                     % (test_loss, 100.*correct/total, correct, total)
             progress_bar(batch_idx, len(valloader), progress_str)
 
     for checkpoint in checkpoints:
-        correct, total, recent_lr = checkpoint['correct'], checkpoint['total'], checkpoint['recent_lr']
+        correct, total = checkpoint['correct'], checkpoint['total']
         # Save checkpoint.
         acc = 100.*correct/total
         if acc > best_acc:
             print('Saving..')
-            save_checkpoint(checkpoint_loc, net, acc, epoch+start_epoch, checkpoint['recent_lr'], checkpoint['recent_period'])
+            save_checkpoint(checkpoint_loc, net, acc, epoch+start_epoch, checkpoint['init_lr'], checkpoint['period'])
             best_acc = acc
 
