@@ -129,3 +129,31 @@ def parse_filename(filename):
     lr, period, score = filename.split("_")
     score, _ = score.split(".")
     return lr, period, score
+
+def gridfile_parse(file_object):
+    for line in file_object:
+        if 'learning rate' in line:
+            lr_settings = line.split(',')[1:]
+        elif 'schedule period' in line:
+            period_settings = line.split(',')[:1]
+    # return enumerated combinations
+    combinations = []
+    for lr in lr_settings:
+        for period in period_settings:
+            combinations.append(("%06.3f"%float(lr), "%05d"%int(period)))
+    return combinations
+
+def existing_checkpoints(checkpoint_loc):
+    # should return dictionary of settings containing file locations and validation accuracies
+    checkpoint_filenames = os.listdir(checkpoint_loc)
+    existing_checkpoints = {}
+    for n in checkpoint_filenames:
+        lr, period, score = parse_filename(n)
+        try:
+            old_score, checkpoint_abspath = existing_checkpoints[(lr, period)]
+            if float(score) > float(old_score):
+                existing_checkpoints[(lr, period)] = {'acc':score, 'abspath':os.path.join(checkpoint_loc, n)}
+        except KeyError:
+            existing_checkpoints[(lr, period)] = {'acc':score, 'abspath':os.path.join(checkpoint_loc, n)}
+    return existing_checkpoints
+

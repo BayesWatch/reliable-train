@@ -17,6 +17,7 @@ from models import *
 from torch.autograd import Variable
 
 import learn
+from utils import gridfile_parse, existing_checkpoints
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--lr', default=0.1, type=float, help='initial learning rate')
@@ -76,6 +77,19 @@ checkpoint_loc = os.path.join(data_save_loc, 'checkpoint', model)
 
 period = args.schedule_period*len(trainloader)
 
+def init_model(lr, period):
+    net = VGG(model)
+    checkpoint = learn.save_checkpoint(checkpoint_loc, net, 0.0, 0, lr, period)
+    checkpoint['period'] = period
+    checkpoint['init_lr'] = lr
+    return checkpoint
+
+def load_model(checkpoint_abspath, lr, period):
+    checkpoint = torch.load(checkpoint_abspath)
+    checkpoint['period'] = period
+    checkpoint['init_lr'] = lr
+    return checkpoint
+
 # Make an initial checkpoint if we don't have one
 if args.resume:
     print('==> Resuming from checkpoint..')
@@ -83,14 +97,18 @@ if args.resume:
     checkpoints = [torch.load(os.path.join(checkpoint_loc, args.resume))]
 else:
     # enumerate grid search settings
-    checkpoints = []
-    for i in range(2):
-        print('==> Building model %i..'%(i+1))
-        net = VGG(model)
-        checkpoint = learn.save_checkpoint(checkpoint_loc, net, 0.0, 0, args.lr, period)
-        checkpoint['period'] = period
-        checkpoint['init_lr'] = args.lr
-        checkpoints.append(checkpoint)
+    with open("grid_%s.csv"%("sgdr" if args.sgdr else "default"), "r") as f:
+        grid_settings = gridfile_parse(f)
+    from collections import OrderedDict
+    checkpoint_loaders = OrderedDict()
+    # load any we have checkpoints for
+    existing = existing_checkpoints(checkpoint_loc)
+    for setting in existing:
+        checkpoint_loaders[setting] = lambda: load_model(existing[setting]['abspath'], settings[0], settings[1])
+    # initialise those we don't
+    for setting in grid_settings:
+        if setting not in checkpoint_loaders.keys():
+            checkpoint_loaders[setting] = init_model(*settings)
 
 if not args.sgdr:
     print("Using standard two step learning rate schedule with period %i minibatches (%i epochs)."%(period, args.schedule_period))
