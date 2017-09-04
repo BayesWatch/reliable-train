@@ -71,7 +71,8 @@ testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False,
 
 classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
-checkpoint_loc = os.path.join(data_save_loc, 'checkpoint')
+model = 'VGG16'
+checkpoint_loc = os.path.join(data_save_loc, 'checkpoint', model)
 
 period = args.schedule_period*len(trainloader)
 
@@ -79,12 +80,13 @@ period = args.schedule_period*len(trainloader)
 if args.resume:
     print('==> Resuming from checkpoint..')
     assert os.path.isdir(checkpoint_loc)
-    checkpoint = torch.load(os.path.join(checkpoint_loc, args.resume))
+    checkpoints = [torch.load(os.path.join(checkpoint_loc, args.resume))]
 else:
+    # enumerate grid search settings
     checkpoints = []
     for i in range(2):
         print('==> Building model %i..'%(i+1))
-        net = VGG('VGG16')
+        net = VGG(model)
         checkpoint = learn.save_checkpoint(checkpoint_loc, net, 0.0, 0, args.lr, period)
         checkpoint['period'] = period
         checkpoint['init_lr'] = args.lr
