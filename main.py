@@ -85,14 +85,12 @@ else:
     for i in range(2):
         print('==> Building model %i..'%(i+1))
         net = VGG('VGG16')
-        print(checkpoint_loc)
         checkpoint = learn.save_checkpoint(checkpoint_loc, net, 0.0, 0, args.lr, period)
+        checkpoint['recent_period'] = period
         checkpoints.append(checkpoint)
 
-checkpoint['recent_period'] = period
-
 if not args.sgdr:
-    print("Using standard two step learning rate schedule with period %i minibatches."%period)
+    print("Using standard two step learning rate schedule with period %i minibatches (%i epochs)."%(period, args.schedule_period))
     lr_schedule = lambda batch_idx: learn.standard_schedule(period, batch_idx)
 else:
     print("Using SGDR with period %i minibatches."%period)
@@ -100,5 +98,4 @@ else:
 
 for epoch in range(200):
     learn.train(epoch, checkpoints, trainloader, args.lr, lr_schedule)
-    #assert False
-    #best_acc = learn.validate(epoch, checkpoints, valloader, checkpoint_loc)
+    learn.validate(epoch, checkpoints, valloader, checkpoint_loc, save=True)
