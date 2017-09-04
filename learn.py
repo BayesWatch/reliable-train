@@ -35,7 +35,7 @@ def save_checkpoint(checkpoint_loc, net, acc, epoch, lr, period):
     }
 
     if not os.path.isdir(checkpoint_loc):
-        os.mkdir(checkpoint_loc)
+        os.makedirs(checkpoint_loc)
     filename = "%06.3f_%05d_%06.3f.t7"%(lr, period, acc)
     torch.save(state, os.path.join(checkpoint_loc, filename))
     return state
