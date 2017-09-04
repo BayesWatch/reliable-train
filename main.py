@@ -21,7 +21,7 @@ import learn
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--lr', default=0.1, type=float, help='initial learning rate')
 parser.add_argument('--schedule_period', default=30, type=float, help='learning rate schedule period')
-parser.add_argument('--resume', '-r', action='store_true', help='resume from checkpoint')
+parser.add_argument('--resume', '-r', default=False, type=str, help='checkpoint to resume')
 parser.add_argument('--data', '-d', default=os.environ.get('SCRATCH',os.getcwd()), help='place to store data')
 parser.add_argument('--sgdr', action='store_true', help='use the SGDR learning rate schedule')
 args = parser.parse_args()
@@ -29,7 +29,6 @@ args = parser.parse_args()
 use_cuda = torch.cuda.is_available()
 best_acc = 0  # best test accuracy
 
-# count how many gpus we're working with here
 n_gpus = torch.cuda.device_count()
 
 # Data
@@ -74,33 +73,24 @@ classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship'
 
 checkpoint_loc = os.path.join(data_save_loc, 'checkpoint')
 
+period = args.schedule_period*len(trainloader)
+
 # Make an initial checkpoint if we don't have one
 if args.resume:
     print('==> Resuming from checkpoint..')
     assert os.path.isdir(checkpoint_loc)
-    checkpoint = torch.load(os.path.join(checkpoint_loc, 'ckpt.t7'))
+    checkpoint = torch.load(os.path.join(checkpoint_loc, args.resume))
 else:
-    print('==> Building model..')
-    net = VGG('VGG16')
-    if use_cuda:
-        net.cuda()
-    # net = ResNet18()
-    # net = GoogLeNet()
-    # net = DenseNet121()
-    # net = ResNeXt29_2x64d()
-    # net = MobileNet()
-    # net = DPN92()
-    # net = ShuffleNetG2()
-    # net = SENet18()
-    checkpoint = learn.save_checkpoint(checkpoint_loc, net, 0.0, 0)
+    checkpoints = []
+    for i in range(2):
+        print('==> Building model %i..'%(i+1))
+        net = VGG('VGG16')
+        print(checkpoint_loc)
+        checkpoint = learn.save_checkpoint(checkpoint_loc, net, 0.0, 0, args.lr, period)
+        checkpoints.append(checkpoint)
 
-checkpoints = []
-for i in range(2):
-    net = VGG('VGG16')
-    checkpoint = learn.save_checkpoint(checkpoint_loc, net, 0.0, 0)
-    checkpoints.append(checkpoint)
+checkpoint['recent_period'] = period
 
-period = args.schedule_period*len(trainloader)
 if not args.sgdr:
     print("Using standard two step learning rate schedule with period %i minibatches."%period)
     lr_schedule = lambda batch_idx: learn.standard_schedule(period, batch_idx)

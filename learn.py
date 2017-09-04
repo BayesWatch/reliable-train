@@ -27,7 +27,7 @@ def unpack_ckpt(checkpoint, gpu_idx):
 
     return net, best_acc, start_epoch
 
-def save_checkpoint(checkpoint_loc, net, acc, epoch):
+def save_checkpoint(checkpoint_loc, net, acc, epoch, lr, period):
     state = {
         'net': net,
         'acc': acc,
@@ -36,7 +36,8 @@ def save_checkpoint(checkpoint_loc, net, acc, epoch):
 
     if not os.path.isdir(checkpoint_loc):
         os.mkdir(checkpoint_loc)
-    torch.save(state, os.path.join(checkpoint_loc,'ckpt.t7'))
+    filename = "%06.3f_%05d_%06.3f.t7"%(lr, period, acc)
+    torch.save(state, os.path.join(checkpoint_loc, filename))
     return state
 
 def set_optimizer_lr(optimizer, lr):
@@ -144,7 +145,7 @@ def validate(epoch, checkpoints, valloader, checkpoint_loc):
     acc = 100.*correct/total
     if acc > best_acc:
         print('Saving..')
-        save_checkpoint(checkpoint_loc, net, acc, epoch+start_epoch)
+        save_checkpoint(checkpoint_loc, net, acc, epoch+start_epoch, checkpoint['recent_lr'], checkpoint['recent_period'])
         best_acc = acc
     return best_acc
 

@@ -122,3 +122,10 @@ def format_time(seconds):
     if f == '':
         f = '0ms'
     return f
+
+def parse_filename(filename):
+    """Filename contains details about learning rate, period and test time
+    score. Parse these out."""
+    lr, period, score = filename.split("_")
+    score, _ = score.split(".")
+    return lr, period, score
