@@ -127,15 +127,18 @@ def parse_filename(filename):
     """Filename contains details about learning rate, period and test time
     score. Parse these out."""
     lr, period, score = filename.split("_")
-    score, _ = score.split(".")
+    score = ".".join(score.split(".")[:-1])
     return lr, period, score
+
+def format_filename(lr, period, acc):
+    return "%06.3f_%05d_%06.3f.t7"%(lr, period, acc)
 
 def gridfile_parse(file_object):
     for line in file_object:
         if 'learning rate' in line:
             lr_settings = line.split(',')[1:]
         elif 'schedule period' in line:
-            period_settings = line.split(',')[:1]
+            period_settings = line.split(',')[1:]
     # return enumerated combinations
     combinations = []
     for lr in lr_settings:
@@ -150,10 +153,32 @@ def existing_checkpoints(checkpoint_loc):
     for n in checkpoint_filenames:
         lr, period, score = parse_filename(n)
         try:
-            old_score, checkpoint_abspath = existing_checkpoints[(lr, period)]
+            old_score = existing_checkpoints[(lr, period)]['acc']
             if float(score) > float(old_score):
                 existing_checkpoints[(lr, period)] = {'acc':score, 'abspath':os.path.join(checkpoint_loc, n)}
         except KeyError:
             existing_checkpoints[(lr, period)] = {'acc':score, 'abspath':os.path.join(checkpoint_loc, n)}
     return existing_checkpoints
 
+def write_status(log_filename, checkpoint_loc, sgdr_or_not):
+    print("Writing to log file...")
+    with open("grid_%s.csv"%("sgdr" if sgdr_or_not else "default"), "r") as f:
+        grid_settings = gridfile_parse(f)
+    existing = existing_checkpoints(checkpoint_loc)
+    log_table = ""
+    for i, setting in enumerate(grid_settings):
+        if i == 0:
+            prev_lr = setting[0]
+        elif setting[0] != prev_lr:
+            log_table += "\n"
+            prev_lr = setting[0]
+        try:
+            filename = os.path.split(existing[setting]['abspath'])[-1]
+            acc = float(existing[setting]['acc'])
+        except KeyError:
+            filename = format_filename(float(setting[0]), float(setting[1]), 0.0)
+            acc = 0.0
+        log_table += "%s:%06.3f    "%(filename, acc)
+
+    with open(log_filename, 'w') as f:
+        f.write(log_table)

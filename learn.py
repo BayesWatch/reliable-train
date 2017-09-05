@@ -13,7 +13,7 @@ import torch.backends.cudnn as cudnn
 
 from torch.autograd import Variable
 
-from utils import progress_bar
+from utils import progress_bar, format_filename
 
 def unpack_ckpt(checkpoint, gpu_idx):
     use_cuda = torch.cuda.is_available()
@@ -36,8 +36,13 @@ def save_checkpoint(checkpoint_loc, net, acc, epoch, lr, period):
 
     if not os.path.isdir(checkpoint_loc):
         os.makedirs(checkpoint_loc)
-    filename = "%06.3f_%05d_%06.3f.t7"%(lr, period, acc)
-    torch.save(state, os.path.join(checkpoint_loc, filename))
+    for x in [lr, period, acc]:
+        if type(x) == str:
+            import pdb
+            pdb.set_trace()
+    filename = format_filename(lr, period, acc)
+    state['recent_abspath'] = os.path.join(checkpoint_loc, filename)
+    torch.save(state, state['recent_abspath'])
     return state
 
 def set_optimizer_lr(optimizer, lr):
@@ -65,7 +70,7 @@ def standard_schedule(period, batch_idx):
     return 0.1**math.floor(batch_idx/period)
 
 # Training
-def train(checkpoints, trainloader, lr, lr_schedule):
+def train(checkpoints, trainloader, lr_schedule):
     use_cuda = torch.cuda.is_available()
     for gpu_idx, checkpoint in enumerate(checkpoints):
         net, best_acc, start_epoch = unpack_ckpt(checkpoint, gpu_idx)
@@ -73,7 +78,9 @@ def train(checkpoints, trainloader, lr, lr_schedule):
 
         # set up learning rate callback
         current_batch = len(trainloader) * start_epoch
-        checkpoint['lr_schedule_callback'] = lambda x: lr*lr_schedule(x+current_batch)
+        lr = float(checkpoint['init_lr'])
+        period = checkpoint['period']*len(trainloader)
+        checkpoint['lr_schedule_callback'] = lambda x: lr*lr_schedule(period, x+current_batch)
 
         criterion = nn.CrossEntropyLoss()
         optimizer = optim.SGD(net.parameters(), lr=lr, momentum=0.9, weight_decay=5e-4)
@@ -90,8 +97,8 @@ def train(checkpoints, trainloader, lr, lr_schedule):
             progress_str = ''
             for checkpoint, train_loss in results:
                 correct, total, recent_lr = checkpoint['correct'], checkpoint['total'], checkpoint['recent_lr']
-                progress_str += '| Loss: %.3f | Acc: %.3f%% (%d/%d) | LR: %.3f |'\
-                    % (train_loss, 100.*correct/total, correct, total, recent_lr)
+                progress_str += '| Loss: %.3f | Acc: %.3f%% (%d/%d) |'\
+                    % (train_loss, 100.*correct/total, correct, total)
             progress_bar(batch_idx, len(trainloader), progress_str)
     checkpoint['epoch'] += 1
     # return nothing because we're doing epochs in place, urgh
@@ -100,10 +107,11 @@ def train(checkpoints, trainloader, lr, lr_schedule):
 def propagate(checkpoint, inputs, targets, batch_idx, update=False):
     gpu_idx = checkpoint['gpu_idx']
     use_cuda = torch.cuda.is_available()
-    checkpoint['recent_lr'] = checkpoint['lr_schedule_callback'](batch_idx)
+
     if use_cuda:
         inputs, targets = inputs.cuda(gpu_idx), targets.cuda(gpu_idx)
     if update:
+        checkpoint['recent_lr'] = checkpoint['lr_schedule_callback'](batch_idx)
         checkpoint['optimizer'] = set_optimizer_lr(checkpoint['optimizer'], checkpoint['recent_lr'])
         checkpoint['optimizer'].zero_grad()
 
@@ -154,6 +162,7 @@ def validate(checkpoints, valloader, checkpoint_loc, save=False):
         acc = 100.*correct/total
         if acc > best_acc:
             print('Saving..')
-            save_checkpoint(checkpoint_loc, net, acc, epoch+start_epoch, checkpoint['init_lr'], checkpoint['period'])
+            state = save_checkpoint(checkpoint_loc, net, acc, checkpoint['epoch'], checkpoint['init_lr'], checkpoint['period'])
+            checkpoint['recent_abspath'] = state['recent_abspath']
             best_acc = acc
 

@@ -17,11 +17,11 @@ from models import *
 from torch.autograd import Variable
 
 import learn
-from utils import gridfile_parse, existing_checkpoints
+from utils import gridfile_parse, existing_checkpoints, write_status
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
-parser.add_argument('--lr', default=0.1, type=float, help='initial learning rate')
-parser.add_argument('--schedule_period', default=30, type=float, help='learning rate schedule period')
+parser.add_argument('--lr', default=0.1, type=float, help='initial learning rate (only used if resuming)')
+parser.add_argument('--schedule_period', default=30, type=float, help='learning rate schedule period (only used if resuming)')
 parser.add_argument('--resume', '-r', default=False, type=str, help='checkpoint to resume')
 parser.add_argument('--data', '-d', default=os.environ.get('SCRATCH',os.getcwd()), help='place to store data')
 parser.add_argument('--sgdr', action='store_true', help='use the SGDR learning rate schedule')
@@ -75,19 +75,17 @@ classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship'
 model = 'VGG16'
 checkpoint_loc = os.path.join(data_save_loc, 'checkpoint', model)
 
-period = args.schedule_period*len(trainloader)
-
 def init_model(lr, period):
     net = VGG(model)
-    checkpoint = learn.save_checkpoint(checkpoint_loc, net, 0.0, 0, lr, period)
-    checkpoint['period'] = period
-    checkpoint['init_lr'] = lr
+    checkpoint = learn.save_checkpoint(checkpoint_loc, net, 0.0, 0, float(lr), int(period))
+    checkpoint['period'] = int(period)
+    checkpoint['init_lr'] = float(lr)
     return checkpoint
 
 def load_model(checkpoint_abspath, lr, period):
     checkpoint = torch.load(checkpoint_abspath)
-    checkpoint['period'] = period
-    checkpoint['init_lr'] = lr
+    checkpoint['period'] = int(period)
+    checkpoint['init_lr'] = float(lr)
     return checkpoint
 
 # Make an initial checkpoint if we don't have one
@@ -95,6 +93,7 @@ if args.resume:
     print('==> Resuming from checkpoint..')
     assert os.path.isdir(checkpoint_loc)
     checkpoints = [torch.load(os.path.join(checkpoint_loc, args.resume))]
+    period = args.schedule_period*len(trainloader)
 else:
     # enumerate grid search settings
     with open("grid_%s.csv"%("sgdr" if args.sgdr else "default"), "r") as f:
@@ -103,20 +102,33 @@ else:
     checkpoint_loaders = OrderedDict()
     # load any we have checkpoints for
     existing = existing_checkpoints(checkpoint_loc)
-    for setting in existing:
-        checkpoint_loaders[setting] = lambda: load_model(existing[setting]['abspath'], settings[0], settings[1])
     # initialise those we don't
     for setting in grid_settings:
-        if setting not in checkpoint_loaders.keys():
-            checkpoint_loaders[setting] = init_model(*settings)
+        if setting in existing.keys():
+            abspath = existing[setting]['abspath']
+            checkpoint_loaders[setting] = lambda s: load_model(abspath, s[0], s[1])
+        else:
+            checkpoint_loaders[setting] = lambda s: init_model(*s)
 
 if not args.sgdr:
-    print("Using standard two step learning rate schedule with period %i minibatches (%i epochs)."%(period, args.schedule_period))
-    lr_schedule = lambda batch_idx: learn.standard_schedule(period, batch_idx)
+    print("Using standard two step learning rate schedule.")
+    lr_schedule = lambda period, batch_idx: learn.standard_schedule(period, batch_idx)
 else:
-    print("Using SGDR with period %i minibatches."%period)
-    lr_schedule = lambda batch_idx: learn.sgdr(period, batch_idx)
+    print("Using SGDR.")
+    lr_schedule = lambda period, batch_idx: learn.sgdr(period, batch_idx)
 
-for epoch in range(200):
-    learn.train(checkpoints, trainloader, args.lr, lr_schedule)
+while True:
+    settings_to_run = [grid_settings.pop(0) for i in range(n_gpus)] 
+    grid_settings += settings_to_run # put these back on the end
+    checkpoints = [checkpoint_loaders[s](s) for s in settings_to_run]
+    # get the next
+    learn.train(checkpoints, trainloader, lr_schedule)
     learn.validate(checkpoints, valloader, checkpoint_loc, save=True)
+    # update checkpoint_loaders and delete checkpoints
+    for i, setting in enumerate(settings_to_run):
+        if 'recent_abspath' in checkpoints[i].keys():
+            new_abspath = checkpoints[i]['recent_abspath']
+            checkpoint_loaders[setting] = lambda s: load_model(new_abspath, s[0], s[1])
+    del checkpoints
+    # write results to log file
+    write_status('grid.log', checkpoint_loc, args.sgdr)
