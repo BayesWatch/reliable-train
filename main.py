@@ -17,7 +17,7 @@ from models import *
 from torch.autograd import Variable
 
 import learn
-from utils import gridfile_parse, existing_checkpoints, write_status
+from utils import gridfile_parse, existing_checkpoints, write_status, clean_checkpoints
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--lr', default=0.1, type=float, help='initial learning rate (only used if resuming)')
@@ -132,3 +132,4 @@ while True:
     del checkpoints
     # write results to log file
     write_status('grid.log', checkpoint_loc, args.sgdr)
+    clean_checkpoints(checkpoint_loc) # clean up old checkpoints

@@ -182,3 +182,12 @@ def write_status(log_filename, checkpoint_loc, sgdr_or_not):
 
     with open(log_filename, 'w') as f:
         f.write(log_table)
+
+def clean_checkpoints(checkpoint_loc):
+    # removes all but the best performing models
+    good_models = [d['abspath'] for d in existing_checkpoints(checkpoint_loc).values()]
+    checkpoint_filenames = os.listdir(checkpoint_loc)   
+    checkpoint_abspaths = [os.path.join(checkpoint_loc, n) for n in checkpoint_filenames]
+    for cp in checkpoint_abspaths:
+        if cp not in good_models:
+            os.remove(cp)
