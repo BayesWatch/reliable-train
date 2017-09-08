@@ -7,7 +7,9 @@ import os
 import sys
 import time
 import math
+import re
 
+import torch
 import torch.nn as nn
 import torch.nn.init as init
 
@@ -27,6 +29,114 @@ except ImportError:
             return None
     def get_summary_writer(data_loc, settings):
         return DummyWriter()
+
+def get_num_gen(gen):
+    return sum(1 for x in gen)
+
+def flops_layer(layer, w, h):
+    """
+    Calculate the number of flops for given a string information of layer.
+    """
+    idx_type_end = layer.find('(')
+
+    params = re.findall('[^a-z](\d+)', layer)
+    flops = 1
+
+    if layer.find('Linear') >= 0:
+        C1 = int(params[0])
+        C2 = int(params[1])
+        flops = C1 * C2
+
+    elif layer.find('Conv2d') >= 0:
+
+        matches = re.findall('([A-z_]+)[ ]*=(\([0-9]+,[ ]*[0-9]+\))', layer)
+        padding = [0,0]
+        stride = [0,0]
+        dilation = [1,1]
+
+        for m, _ in enumerate(matches):
+            if matches[m][0]=='padding':
+                padding[0] = int(re.findall('[^a-z](\d+)',matches[m][1])[0])
+                padding[1] = int(re.findall('[^a-z](\d+)',matches[m][1])[1])
+            elif matches[m][0]=='stride':
+                stride[0] = int(re.findall('[^a-z](\d+)',matches[m][1])[0])
+                stride[1] = int(re.findall('[^a-z](\d+)',matches[m][1])[1])
+            elif matches[m][0]=='dilation':
+                dilation[0] = int(re.findall('[^a-z](\d+)',matches[m][1])[0])
+                dilation[1] = int(re.findall('[^a-z](\d+)',matches[m][1])[1])
+
+        C1 = int(params[0])
+        C2 = int(params[1])
+        K1 = int(params[2])
+        K2 = int(params[3])
+
+        # image size
+        flops = C1 * C2 * K1 * K2 * h * w
+        print(C1,C2,K1,K2,h,w)
+        h = math.floor((h+2*padding[0]-dilation[0]*(K1-1)-1)/stride[0]+1)
+        w = math.floor((w+2*padding[1]-dilation[1]*(K2-1)-1)/stride[1]+1)
+        #print(flops)
+
+
+    elif layer.find('MaxPool2d') >= 0:
+
+        matches = re.findall('([A-z_]+)[ ]*=(\([0-9]+,[ ]*[0-9]+\))', layer)
+
+        size = [0,0]
+        stride = [0,0]
+        dilation = [0,0]
+        padding = [0,0]
+
+        for m, _ in enumerate(matches):
+            if matches[m][0]=='size':
+                size[0] = int(re.findall('[^a-z](\d+)',matches[m][1])[0])
+                size[1] = int(re.findall('[^a-z](\d+)',matches[m][1])[1])
+            elif matches[m][0]=='stride':
+                stride[0] = int(re.findall('[^a-z](\d+)',matches[m][1])[0])
+                stride[1] = int(re.findall('[^a-z](\d+)',matches[m][1])[1])
+            elif matches[m][0]=='dilation':
+                dilation[0] = int(re.findall('[^a-z](\d+)',matches[m][1])[0])
+                dilation[1] = int(re.findall('[^a-z](\d+)',matches[m][1])[1])
+            elif matches[m][0]=='padding':
+                padding[0] = int(re.findall('[^a-z](\d+)',matches[m][1])[0])
+                padding[1] = int(re.findall('[^a-z](\d+)',matches[m][1])[1])
+
+        h = math.floor((h+2*padding[0]-dilation[0]*(size[0]-1)-1)/stride[0]+1)
+        w = math.floor((w+2*padding[1]-dilation[1]*(size[1]-1)-1)/stride[1]+1)
+
+    return flops, w, h
+
+
+def calculate_flops(gen, w, h):
+    # I have modified this function so that it keeps track of the width/height of the representation.
+    # net.children() goes in as gen
+    flops = 0
+
+    for child in gen:
+        num_children = get_num_gen(child.children())
+
+        # leaf node
+        if num_children == 0:
+            no_flops, w, h = flops_layer(str(child), w, h,)
+            flops += no_flops
+
+        else:
+            no_flops,w ,h = calculate_flops(child.children(),w,h)
+            flops += no_flops
+            #print(flops)
+    return flops, w, h
+
+def get_no_params(net):
+
+    params = net.state_dict()
+    tot=0
+    for p in params:
+        no = params[p].view(-1).__len__()
+        tot += no
+        print('%s has %d params' % (p,no))
+    print('Net has %d params in total' % tot)
+    return tot
+
 
 def get_mean_and_std(dataset):
     '''Compute the mean and std value of dataset.'''

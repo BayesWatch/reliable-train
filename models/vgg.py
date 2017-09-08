@@ -1,8 +1,9 @@
-'''VGG11/13/16/19 in Pytorch.'''
+'''VGG11/13/16/19 in Pytorch.
+Added in width multiplier as in https://arxiv.org/pdf/1704.04861.pdf'''
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
-
+import math
 
 cfg = {
     'VGG11': [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
@@ -13,10 +14,11 @@ cfg = {
 
 
 class VGG(nn.Module):
-    def __init__(self, vgg_name):
+    def __init__(self, vgg_name, width=1):
         super(VGG, self).__init__()
-        self.features = self._make_layers(cfg[vgg_name])
-        self.classifier = nn.Linear(512, 10)
+        self.width = width
+        self.features, classifier_size = self._make_layers(cfg[vgg_name])
+        self.classifier = nn.Linear(classifier_size, 10)
 
     def forward(self, x):
         out = self.features(x)
@@ -31,12 +33,13 @@ class VGG(nn.Module):
             if x == 'M':
                 layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
             else:
+                x = math.ceil(self.width*x)
                 layers += [nn.Conv2d(in_channels, x, kernel_size=3, padding=1),
                            nn.BatchNorm2d(x),
                            nn.ReLU(inplace=True)]
                 in_channels = x
         layers += [nn.AvgPool2d(kernel_size=1, stride=1)]
-        return nn.Sequential(*layers)
+        return nn.Sequential(*layers), in_channels
 
 # net = VGG('VGG11')
 # x = torch.randn(2,3,32,32)
