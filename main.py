@@ -80,12 +80,14 @@ def init_model(lr, period):
     checkpoint = learn.save_checkpoint(checkpoint_loc, net, 0.0, 0, float(lr), int(period))
     checkpoint['period'] = int(period)
     checkpoint['init_lr'] = float(lr)
+    checkpoint['summary_writer'] = get_summary_writer(args.data, [float(lr), int(period)])
     return checkpoint
 
 def load_model(checkpoint_abspath, lr, period):
     checkpoint = torch.load(checkpoint_abspath)
     checkpoint['period'] = int(period)
     checkpoint['init_lr'] = float(lr)
+    checkpoint['summary_writer'] = get_summary_writer(args.data, [float(lr), int(period)])
     return checkpoint
 
 # Make an initial checkpoint if we don't have one
@@ -133,3 +135,4 @@ while True:
     # write results to log file
     write_status('grid.log', checkpoint_loc, args.sgdr)
     clean_checkpoints(checkpoint_loc) # clean up old checkpoints
+    

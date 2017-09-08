@@ -11,6 +11,22 @@ import math
 import torch.nn as nn
 import torch.nn.init as init
 
+try:
+    from tensorboard import SummaryWriter
+    def get_summary_writer(scratch_loc, settings):
+        # save to subdir describing the hyperparam settings
+        dirname = format_settings_str(*settings)
+        return SummaryWriter(os.path.join(scratch_loc, "logs", dirname))
+        
+except ImportError:
+    print("pytorch-tensorboard not detected, will not write plot logs anywhere")
+    class DummyWriter(object):
+        def __init__(self, log_dir):
+            return None
+        def add_scalar(tag, scalar_value, global_step):
+            return None
+    def get_summary_writer(data_loc, settings):
+        return DummyWriter()
 
 def get_mean_and_std(dataset):
     '''Compute the mean and std value of dataset.'''
@@ -130,8 +146,18 @@ def parse_filename(filename):
     score = ".".join(score.split(".")[:-1])
     return lr, period, score
 
+def format_settings_str(*settings):
+    str_components = []
+    for s in settings:
+        if type(s) == float:
+            str_components.append("%06.3f"%s)
+        elif type(s) == int:
+            str_components.append("%05d"%s)
+    return "_".join(str_components)
+
 def format_filename(lr, period, acc):
-    return "%06.3f_%05d_%06.3f.t7"%(lr, period, acc)
+    fname_string = format_settings_str(lr, period, acc)
+    return fname_string+".t7"
 
 def gridfile_parse(file_object):
     for line in file_object:

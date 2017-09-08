@@ -97,10 +97,16 @@ def train(checkpoints, trainloader, lr_schedule):
             progress_str = ''
             for checkpoint, train_loss in results:
                 correct, total, recent_lr = checkpoint['correct'], checkpoint['total'], checkpoint['recent_lr']
+                train_acc = 100.*correct/total
                 progress_str += '| Loss: %.3f | Acc: %.3f%% (%d/%d) |'\
-                    % (train_loss, 100.*correct/total, correct, total)
+                    % (train_loss, train_acc, correct, total)
+                # and add to summarywriter
+
             progress_bar(batch_idx, len(trainloader), progress_str)
-    checkpoint['epoch'] += 1
+    for checkpoint in checkpoints:
+        checkpoint['epoch'] += 1
+        checkpoint['summary_writer'].add_scalar('train_loss', checkpoint['avg_train_loss'], checkpoint['epoch'])
+        checkpoint['summary_writer'].add_scalar('train_accuracy', checkpoint['train_acc'], checkpoint['epoch'])
     # return nothing because we're doing epochs in place, urgh
     return None
 
@@ -165,4 +171,6 @@ def validate(checkpoints, valloader, checkpoint_loc, save=False):
             state = save_checkpoint(checkpoint_loc, net, acc, checkpoint['epoch'], checkpoint['init_lr'], checkpoint['period'])
             checkpoint['recent_abspath'] = state['recent_abspath']
             best_acc = acc
+        checkpoint['summary_writer'].add_scalar('train_loss', checkpoint['avg_val_loss'], checkpoint['epoch'])
+        checkpoint['summary_writer'].add_scalar('train_accuracy', checkpoint['val_acc'], checkpoint['epoch'])
 
