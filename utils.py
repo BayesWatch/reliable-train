@@ -252,9 +252,9 @@ def format_time(seconds):
 def parse_filename(filename):
     """Filename contains details about learning rate, period and test time
     score. Parse these out."""
-    lr, period, score = filename.split("_")
+    lr, period, score, epoch = filename.split("_")
     score = ".".join(score.split(".")[:-1])
-    return lr, period, score
+    return lr, period, score, epoch
 
 def format_settings_str(*settings):
     str_components = []
@@ -265,8 +265,8 @@ def format_settings_str(*settings):
             str_components.append("%05d"%s)
     return "_".join(str_components)
 
-def format_filename(lr, period, acc):
-    fname_string = format_settings_str(lr, period, acc)
+def format_filename(lr, period, acc, epoch):
+    fname_string = format_settings_str(lr, period, acc, epoch)
     return fname_string+".t7"
 
 def gridfile_parse(file_object):

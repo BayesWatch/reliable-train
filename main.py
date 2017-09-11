@@ -140,4 +140,4 @@ while True:
     # write results to log file
     write_status('grid.log', checkpoint_loc, args.sgdr)
     clean_checkpoints(checkpoint_loc) # clean up old checkpoints
-    
+

@@ -13,7 +13,7 @@ import torch.backends.cudnn as cudnn
 
 from torch.autograd import Variable
 
-from utils import progress_bar, format_filename
+from utils import progress_bar
 
 def unpack_ckpt(checkpoint, gpu_idx):
     use_cuda = torch.cuda.is_available()
@@ -26,24 +26,6 @@ def unpack_ckpt(checkpoint, gpu_idx):
         cudnn.benchmark = True
 
     return net, best_acc, start_epoch
-
-def save_checkpoint(checkpoint_loc, net, acc, epoch, lr, period):
-    state = {
-        'net': net,
-        'acc': acc,
-        'epoch': epoch,
-    }
-
-    if not os.path.isdir(checkpoint_loc):
-        os.makedirs(checkpoint_loc)
-    for x in [lr, period, acc]:
-        if type(x) == str:
-            import pdb
-            pdb.set_trace()
-    filename = format_filename(lr, period, acc)
-    state['recent_abspath'] = os.path.join(checkpoint_loc, filename)
-    torch.save(state, state['recent_abspath'])
-    return state
 
 def set_optimizer_lr(optimizer, lr):
     # callback to set the learning rate in an optimizer, without rebuilding the whole optimizer
