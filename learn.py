@@ -87,6 +87,7 @@ def train(checkpoints, trainloader, lr_schedule):
         checkpoint.update({'criterion': criterion, 'optimizer':optimizer, 'gpu_idx':gpu_idx})
         checkpoint['correct'] = 0
         checkpoint['total'] = 0
+        checkpoint['avg_train_loss'] = 0.0
 
     with ThreadPoolExecutor(max_workers=4) as executor:
         for batch_idx, (inputs, targets) in enumerate(trainloader):
@@ -97,13 +98,16 @@ def train(checkpoints, trainloader, lr_schedule):
             progress_str = ''
             for checkpoint, train_loss in results:
                 correct, total, recent_lr = checkpoint['correct'], checkpoint['total'], checkpoint['recent_lr']
-                train_acc = 100.*correct/total
+                checkpoint['train_acc'] = 100.*correct/total
+                checkpoint['avg_train_loss'] += train_loss
                 progress_str += '| Loss: %.3f | Acc: %.3f%% (%d/%d) |'\
-                    % (train_loss, train_acc, correct, total)
+                    % (train_loss, checkpoint['train_acc'], correct, total)
 
             progress_bar(batch_idx, len(trainloader), progress_str)
+
     for checkpoint in checkpoints:
         checkpoint['epoch'] += 1
+        checkpoint['avg_train_loss'] = checkpoint['avg_train_loss']/len(trainloader)
         checkpoint['summary_writer'].add_scalar('train_loss', checkpoint['avg_train_loss'], checkpoint['epoch'])
         checkpoint['summary_writer'].add_scalar('train_accuracy', checkpoint['train_acc'], checkpoint['epoch'])
         checkpoint['summary_writer'].add_scalar('learning_rate', checkpoint['recent_lr'], checkpoint['epoch'])
@@ -148,6 +152,7 @@ def validate(checkpoints, valloader, checkpoint_loc, save=False):
         checkpoint['gpu_idx'] = gpu_idx
         checkpoint['correct'] = 0
         checkpoint['total'] = 0
+        checkpoint['avg_val_loss'] = 0.0
 
     with ThreadPoolExecutor(max_workers=4) as executor:
         for batch_idx, (inputs, targets) in enumerate(valloader):
@@ -158,12 +163,15 @@ def validate(checkpoints, valloader, checkpoint_loc, save=False):
             progress_str = ''
             for checkpoint, test_loss in results:
                 correct, total = checkpoint['correct'], checkpoint['total']
+                checkpoint['val_acc'] = 100.*correct/total
                 progress_str += '| Loss: %.3f | Acc: %.3f%% (%d/%d) |'\
-                    % (test_loss, 100.*correct/total, correct, total)
+                    % (test_loss, checkpoint['val_acc'], correct, total)
+                checkpoint['avg_val_loss'] += test_loss
             progress_bar(batch_idx, len(valloader), progress_str)
 
     for checkpoint in checkpoints:
         correct, total = checkpoint['correct'], checkpoint['total']
+        checkpoint['avg_val_loss'] = checkpoint['avg_val_loss']/len(valloader)
         # Save checkpoint.
         acc = 100.*correct/total
         if acc > best_acc:

@@ -17,7 +17,7 @@ from models import *
 from torch.autograd import Variable
 
 import learn
-from utils import gridfile_parse, existing_checkpoints, write_status, clean_checkpoints
+from utils import gridfile_parse, existing_checkpoints, write_status, clean_checkpoints, get_summary_writer
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--lr', default=0.1, type=float, help='initial learning rate (only used if resuming)')
@@ -59,7 +59,7 @@ class PartialDataset(torch.utils.data.Dataset):
         return self.parent_ds[i+self.offset]
 
 data_save_loc = os.path.join(args.data, 'data')
-print("Saving data and checkpoints to: %s"%data_save_loc)
+print("Data saved to: %s"%data_save_loc)
 trainvalset = torchvision.datasets.CIFAR10(root=data_save_loc, train=True, download=True, transform=transform_train)
 trainset = PartialDataset(trainvalset, 0, 40000)
 trainloader = torch.utils.data.DataLoader(trainset, batch_size=128, shuffle=True, num_workers=2)
@@ -73,7 +73,10 @@ testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False,
 classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
 model = 'VGG16'
-checkpoint_loc = os.path.join(data_save_loc, 'checkpoint', model)
+checkpoint_loc = os.path.join(args.data, 'checkpoint', model)
+if not os.path.isdir(checkpoint_loc):
+    os.makedirs(checkpoint_loc)
+print("Checkpoints saved to: %s"%checkpoint_loc)
 
 def init_model(lr, period):
     net = VGG(model)
@@ -121,6 +124,7 @@ else:
 
 while True:
     settings_to_run = [grid_settings.pop(0) for i in range(n_gpus)] 
+    print(settings_to_run)
     grid_settings += settings_to_run # put these back on the end
     checkpoints = [checkpoint_loaders[s](s) for s in settings_to_run]
     # get the next
@@ -130,6 +134,7 @@ while True:
     for i, setting in enumerate(settings_to_run):
         if 'recent_abspath' in checkpoints[i].keys():
             new_abspath = checkpoints[i]['recent_abspath']
+            print("updating to %s"%new_abspath)
             checkpoint_loaders[setting] = lambda s: load_model(new_abspath, s[0], s[1])
     del checkpoints
     # write results to log file

@@ -25,10 +25,10 @@ except ImportError:
     class DummyWriter(object):
         def __init__(self, log_dir):
             return None
-        def add_scalar(tag, scalar_value, global_step):
+        def add_scalar(self, tag, scalar_value, global_step):
             return None
     def get_summary_writer(data_loc, settings):
-        return DummyWriter()
+        return DummyWriter(data_loc)
 
 def get_num_gen(gen):
     return sum(1 for x in gen)
@@ -326,4 +326,6 @@ def clean_checkpoints(checkpoint_loc):
     checkpoint_abspaths = [os.path.join(checkpoint_loc, n) for n in checkpoint_filenames]
     for cp in checkpoint_abspaths:
         if cp not in good_models:
+            print("removing %s"%cp)
+            print(good_models)
             os.remove(cp)
