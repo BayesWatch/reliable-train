@@ -265,8 +265,8 @@ def format_settings_str(*settings):
             str_components.append("%05d"%s)
     return "_".join(str_components)
 
-def format_filename(lr, period, acc, epoch):
-    fname_string = format_settings_str(lr, period, acc, epoch)
+def format_filename(lr, decay, acc, epoch):
+    fname_string = format_settings_str(lr, decay, acc, epoch)
     return fname_string+".t7"
 
 def gridfile_parse(file_object):

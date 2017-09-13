@@ -16,15 +16,13 @@ import argparse
 from models import *
 from torch.autograd import Variable
 
-import learn
-from utils import gridfile_parse, existing_checkpoints, write_status, clean_checkpoints, get_summary_writer
+from utils import gridfile_parse, existing_checkpoints, write_status, \
+        clean_checkpoints, get_summary_writer, progress_bar
+from checkpoint import Checkpoint
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
-parser.add_argument('--lr', default=0.1, type=float, help='initial learning rate (only used if resuming)')
-parser.add_argument('--schedule_period', default=30, type=float, help='learning rate schedule period (only used if resuming)')
-parser.add_argument('--resume', '-r', default=False, type=str, help='checkpoint to resume')
 parser.add_argument('--data', '-d', default=os.environ.get('SCRATCH',os.getcwd()), help='place to store data')
-parser.add_argument('--sgdr', action='store_true', help='use the SGDR learning rate schedule')
+#parser.add_argument('--sgdr', action='store_true', help='use the SGDR learning rate schedule')
 args = parser.parse_args()
 
 use_cuda = torch.cuda.is_available()
@@ -78,66 +76,60 @@ if not os.path.isdir(checkpoint_loc):
     os.makedirs(checkpoint_loc)
 print("Checkpoints saved to: %s"%checkpoint_loc)
 
-def init_model(lr, period):
-    net = VGG(model)
-    checkpoint = learn.save_checkpoint(checkpoint_loc, net, 0.0, 0, float(lr), int(period))
-    checkpoint['period'] = int(period)
-    checkpoint['init_lr'] = float(lr)
-    checkpoint['summary_writer'] = get_summary_writer(args.data, [float(lr), int(period)])
-    return checkpoint
+def standard_schedule(decay_ratio, period, batch_idx):
+    # returns multiplier for current batch according to the standard two step schedule
+    batch_idx, period = float(batch_idx), float(period)
+    return lr_decay_ratios**math.floor(batch_idx/period)
 
-def load_model(checkpoint_abspath, lr, period):
-    checkpoint = torch.load(checkpoint_abspath)
-    checkpoint['period'] = int(period)
-    checkpoint['init_lr'] = float(lr)
-    checkpoint['summary_writer'] = get_summary_writer(args.data, [float(lr), int(period)])
-    return checkpoint
+schedule = standard_schedule
 
-# Make an initial checkpoint if we don't have one
-if args.resume:
-    print('==> Resuming from checkpoint..')
-    assert os.path.isdir(checkpoint_loc)
-    checkpoints = [torch.load(os.path.join(checkpoint_loc, args.resume))]
-    period = args.schedule_period*len(trainloader)
-else:
-    # enumerate grid search settings
-    with open("grid_%s.csv"%("sgdr" if args.sgdr else "default"), "r") as f:
-        grid_settings = gridfile_parse(f)
-    from collections import OrderedDict
-    checkpoint_loaders = OrderedDict()
-    # load any we have checkpoints for
-    existing = existing_checkpoints(checkpoint_loc)
-    # initialise those we don't
-    for setting in grid_settings:
-        if setting in existing.keys():
-            abspath = existing[setting]['abspath']
-            checkpoint_loaders[setting] = lambda s: load_model(abspath, s[0], s[1])
-        else:
-            checkpoint_loaders[setting] = lambda s: init_model(*s)
+print("Initialising candidate configurations...")
+rng = np.random.RandomState(42)
+learning_rates = np.exp(rng.uniform(low=np.log(0.01), high=np.log(0.2), size=32)) # uniform samples in the log space
+lr_decay_ratios = rng.uniform(low=0., high=0.5, size=32)
+for initial_lr, lr_decay in zip(learning_rates, lr_decay_ratios):
+    checkpoints.append(Checkpoint(model, initial_lr, lr_decay, schedule, checkpoint_loc))
 
-if not args.sgdr:
-    print("Using standard two step learning rate schedule.")
-    lr_schedule = lambda period, batch_idx: learn.standard_schedule(period, batch_idx)
-else:
-    print("Using SGDR.")
-    lr_schedule = lambda period, batch_idx: learn.sgdr(period, batch_idx)
+def train(checkpoints, trainloader):
+    for gpu_index, checkpoint in enumerate(selected_checkpoints):
+        checkpoint.init_for_epoch(gpu_index, should_update=True, epoch_size=len(trainloader))
+
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        for batch_idx, (inputs, targets) in enumerate(trainloader):
+            propagate = lambda ckpt: ckpt.propagate(inputs, targets, batch_idx, should_update=True)
+            results = executor.map(propagate, checkpoints)
+
+            progress_str = ''
+            for checkpoint, train_loss in results:
+                progress_str += checkpoint.progress()
+
+            progress_bar(batch_idx, len(trainloader), progress_str)
+
+    for checkpoint in checkpoints:
+        checkpoint.epoch += 1
+
+def validate(checkpoints, valloader, checkpoint_loc, save=False):
+    for gpu_idx, checkpoint in enumerate(checkpoints):
+        checkpoint.init_for_epoch(gpu_index, should_update=False)
+
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        for batch_idx, (inputs, targets) in enumerate(valloader):
+            propagate = lambda ckpt: ckpt.propagate(inputs, targets, batch_idx, should_update=False)
+            results = executor.map(propagate, checkpoints)
+
+            progress_str = ''
+            for checkpoint, test_loss in results:
+                progress_str += checkpoint.progress()
+            progress_bar(batch_idx, len(valloader), progress_str)
+
+    for checkpoint in checkpoints:
+        checkpoint.save_recent()
 
 while True:
-    settings_to_run = [grid_settings.pop(0) for i in range(n_gpus)] 
-    print(settings_to_run)
-    grid_settings += settings_to_run # put these back on the end
-    checkpoints = [checkpoint_loaders[s](s) for s in settings_to_run]
-    # get the next
-    learn.train(checkpoints, trainloader, lr_schedule)
-    learn.validate(checkpoints, valloader, checkpoint_loc, save=True)
-    # update checkpoint_loaders and delete checkpoints
-    for i, setting in enumerate(settings_to_run):
-        if 'recent_abspath' in checkpoints[i].keys():
-            new_abspath = checkpoints[i]['recent_abspath']
-            print("updating to %s"%new_abspath)
-            checkpoint_loaders[setting] = lambda s: load_model(new_abspath, s[0], s[1])
-    del checkpoints
-    # write results to log file
-    write_status('grid.log', checkpoint_loc, args.sgdr)
-    clean_checkpoints(checkpoint_loc) # clean up old checkpoints
+    # choose a subset of the candidate models and init for training and validation
+    selected_checkpoints = [checkpoints.pop(0) for i in range(n_gpus)]
+
+    # train and validate these checkpoints
+    train(selected_checkpoints, trainloader)
+    validate(selected_checkpoints, valloader)
 

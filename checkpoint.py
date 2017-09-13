@@ -37,30 +37,33 @@ class Checkpoint(object):
             arguments.
         initial_lr: the initial setting of learning rate, regardless
             of schedule.
-        lr_period: the period of the learning rate schedule.
+        lr_decay: the size of each decay step
         lr_schedule: a function defining the learning rate schedule, itself
             taking (period, batch_index) as arguments.
         checkpoint_loc: location to save checkpoints to.
     """
-    def __init__(self, model, initial_lr, lr_period, lr_schedule, checkpoint_loc):
+    def __init__(self, model, initial_lr, lr_decay, lr_schedule, checkpoint_loc):
+        # check cuda availability
+        use_cuda = torch.cuda.is_available()
+
         # store settings
         self.initial_lr = float(initial_lr)
-        self.lr_period = int(lr_period)
+        self.lr_decay = float(lr_decay)
         # string describing settings canonically
-        self.setting_str = format_settings_str(self.initial_lr, self.lr_period)
+        self.setting_str = format_settings_str(self.initial_lr, self.lr_decay)
         self.checkpoint_loc = checkpoint_loc
         # store learning rate schedule
-        self.lr_schedule = lambda batch_index: lr_schedule(self.lr_period, batch_index)
+        self.lr_schedule = lambda batch_index, period: lr_schedule(self.lr_decay, period, batch_index)
         
         # initialise summary writer, if we can
-        self.summary_writer = get_summary_writer(args.data, [self.initial_lr, self.lr_period])
+        self.summary_writer = get_summary_writer(args.data, [self.initial_lr, self.lr_decay])
 
         # if checkpoint directory doesn't exist, make it
-        if not os.path.isdir(checkpoint_loc):
-            os.makedirs(checkpoint_loc)
+        if not os.path.isdir(self.checkpoint_loc):
+            os.makedirs(self.checkpoint_loc)
 
         # look for checkpoints with these settings
-        existing = existing_checkpoints(checkpoint_loc)
+        existing = existing_checkpoints(self.checkpoint_loc)
         self.best_saved = {'acc':0.0, 'not_found': False} # in case there are no saves
         self.most_recent_saved = {'epoch':0, 'not_found': False}
         for e in existing:
@@ -72,7 +75,8 @@ class Checkpoint(object):
                 if e[1]['epoch'] > self.most_recent_saved['epoch']:
                     self.most_recent_saved = e[1]
 
-        assert False
+        # count minibatches in total
+        self.minibatch_idx = 0
 
         if self.best_saved.get('not_found', False):
             print("didn't find a save file")
@@ -93,15 +97,106 @@ class Checkpoint(object):
             'acc': acc,
             'epoch': epoch}
 
-        filename = format_filename(lr, period, acc, epoch)
-        save_path = os.path.join(checkpoint_loc, filename)
+        filename = format_filename(self.initial_lr, self.lr_decay, acc, epoch)
+        save_path = os.path.join(self.checkpoint_loc, filename)
         torch.save(state, save_path)
         return save_path 
 
+    def save_recent(self, clean=True):
+        # save most recent model
+        acc = 100.*self.correct/self.total
+        old_abspath = self.most_recent_saved['abspath']
+        self.most_recent_saved = {}
+        self.most_recent_saved['abspath'] = self.save(acc, self.epoch)
+        self.most_recent_saved['acc'] = 0.0
+        self.most_recent_saved['epoch'] = self.epoch
+
+        # change best to point to it if it's the best
+        if acc > self.best_saved['acc']:
+            self.best_saved = self.most_recent_saved
+
+        if clean:
+            # remove the old one if it's not the best
+            if old_abspath != self.best_saved['abspath']:
+                os.remove(old_abspath)
+
     def load_recent(self):
         # loads most recent model
-        assert False
+        state = torch.load(self.most_recent_saved['abspath'])
+        return state['net'], state['acc'], state['epoch']
 
+    def init_for_epoch(self, gpu_index, should_update, epoch_size=None):
+        self.gpu_index = gpu_index
+
+        # load most recent params       
+        self.net, acc, self.epoch = self.load_recent()
+
+        # always set up criterion and optimiser
+        self.criterion = nn.CrossEntropyLoss()
+        self.optimizer = optim.SGD(net.parameters(), lr=0.1, momentum=0.9, weight_decay=5e-4)
+        self.correct, self.total, self.accum_loss = 0, 0, []
+
+        if should_update:
+            # set into training mode
+            self.net.train()
+
+            # set up learning rate callback
+            current_batch = epoch_size * start_epoch
+            period = 60*epoch_size
+            self.lr_schedule_callback = lambda x: self.initial_lr*self.lr_schedule(period, x+current_batch)
+
+            self.epoch_size = epoch_size
+
+            self.minibatch_idx = current_batch
+        else:
+            self.net.eval()
+
+    def train(self, mode=True):
+        return self.net.train()
+
+    def eval(self):
+        return self.train(False)
+
+    def propagate(self, inputs, targets, batch_index, should_update):
+        # puts inputs and targets on correct gpu
+        # sets the learning rate
+        # forward pass
+        # backward pass and update if should_update is true
+        # records no. correctly classified and total
+        # records loss
+
+        if not should_update:
+            if self.training:
+                raise ValueError("Model should not be in train mode if not updating parameters.")
+
+        if self.use_cuda:
+            inputs, targets = inputs.cuda(self.gpu_idx), targets.cuda(self.gpu_idx)
+        if should_update:
+            lr = self.lr_schedule_callback(batch_idx)
+            self.optimizer = set_optimizer_lr(self.optimizer, self.recent_lr)
+            self.optimizer.zero_grad()
+
+        inputs, targets = Variable(inputs), Variable(targets)
+        outputs = self.net(inputs)
+        loss = self.criterion(outputs, targets)
+
+        if should_update:
+            loss.backward()
+            self.optimizer.step()
+            self.minibatch_idx += 1
+
+        loss = loss.data[0]
+        _, predicted = torch.max(outputs.data, 1)
+        self.total += targets.size(0)
+        self.correct += predicted.eq(targets.data).cpu().sum()
+        self.accum_loss.append(loss)
+
+        return  loss
+
+    def progress(self):
+        acc = 100.*self.correct/self.total
+        return '| %.3f | %.3f%% |'\
+            % (np.mean(self.accum_loss), acc)
 
 def existing_checkpoints(checkpoint_loc):
     # should return dictionary of settings containing file locations and validation accuracies
@@ -112,4 +207,10 @@ def existing_checkpoints(checkpoint_loc):
         existing_checkpoints.append(((lr, period), {'acc':float(score),
             'abspath':os.path.join(checkpoint_loc, n), 'epoch': int(epoch)}))
     return existing_checkpoints
+
+def set_optimizer_lr(optimizer, lr):
+    # callback to set the learning rate in an optimizer, without rebuilding the whole optimizer
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = lr
+    return optimizer
 
