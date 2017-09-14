@@ -105,7 +105,7 @@ class Checkpoint(object):
         torch.save(state, save_path)
         return save_path 
 
-    def save_recent(self, clean=True):
+    def save_recent(self, clean=True, log=True):
         # save most recent model
         acc = 100.*self.correct/self.total
         old_abspath = self.most_recent_saved['abspath']
@@ -122,6 +122,9 @@ class Checkpoint(object):
             # remove the old one if it's not the best
             if old_abspath != self.best_saved['abspath']:
                 os.remove(old_abspath)
+
+        if log:
+            self.summary_writer.add_scalar(self.setting_str + '/val_loss', np.mean(self.accum_loss), self.minibatch_idx)
 
     def load_recent(self):
         # loads most recent model
@@ -195,6 +198,11 @@ class Checkpoint(object):
         self.total += targets.size(0)
         self.correct += predicted.eq(targets.data).cpu().sum()
         self.accum_loss.append(loss)
+
+        if should_update:
+            acc = 100.*self.correct/self.total
+            self.summary_writer.add_scalar(self.setting_str + '/train_loss', loss.data[0], self.minibatch_idx)
+            self.summary_writer.add_scalar(self.setting_str + '/accuracy', acc, self.minibatch_idx)
 
         return  loss
 
