@@ -15,20 +15,19 @@ import torch.nn.init as init
 
 try:
     from tensorboard import SummaryWriter
-    def get_summary_writer(scratch_loc, settings):
+    def get_summary_writer(log_loc, settings):
         # save to subdir describing the hyperparam settings
         dirname = format_settings_str(*settings)
-        return SummaryWriter(os.path.join(scratch_loc, "logs", dirname))
-        
+        return SummaryWriter(os.path.join(log_loc, dirname))
 except ImportError:
-    print("pytorch-tensorboard not detected, will not write plot logs anywhere")
+    print("tensorboard-pytorch not detected, will not write plot logs anywhere")
     class DummyWriter(object):
         def __init__(self, log_dir):
             return None
         def add_scalar(self, tag, scalar_value, global_step):
             return None
-    def get_summary_writer(data_loc, settings):
-        return DummyWriter(data_loc)
+    def get_summary_writer(log_loc, settings):
+        return DummyWriter(log_loc)
 
 def get_num_gen(gen):
     return sum(1 for x in gen)
@@ -252,7 +251,7 @@ def format_time(seconds):
 def parse_filename(filename):
     """Filename contains details about learning rate, period and test time
     score. Parse these out."""
-    lr, period, score, epoch = filename.split("_")
+    lr, period, score, epoch = filename[:-3].split("_")
     score = ".".join(score.split(".")[:-1])
     return lr, period, score, epoch
 
