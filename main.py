@@ -23,6 +23,7 @@ import numpy as np
 from utils import gridfile_parse, existing_checkpoints, write_status, \
         clean_checkpoints, get_summary_writer, progress_bar
 from checkpoint import Checkpoint
+from hyperband import Hyperband
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--data', '-d', default=os.environ.get('SCRATCH',os.getcwd()), help='place to store data')
@@ -92,6 +93,7 @@ def standard_schedule(decay_ratio, period, batch_idx):
 
 schedule = standard_schedule
 
+print("Initialising hyperband...")
 learning_rates = np.exp(rng.uniform(low=np.log(0.01), high=np.log(0.2), size=32)) # uniform samples in the log space
 lr_decay_ratios = rng.uniform(low=0., high=0.5, size=32)
 def get_random_config(rng):
@@ -104,6 +106,8 @@ if 'VGG' in model_tag:
 
 def get_checkpoint(initial_lr, lr_decay):
     return Checkpoint(model, initial_lr, lr_decay, schedule, checkpoint_loc, log_loc)
+
+checkpoint_handler = Hyperband
 
 def train(checkpoints, trainloader):
     for gpu_index, checkpoint in enumerate(selected_checkpoints):
@@ -145,8 +149,7 @@ def validate(checkpoints, valloader, save=False):
 
 while True:
     # choose a subset of the candidate models and init for training and validation
-    selected_checkpoints = [checkpoints.pop(0) for i in range(n_gpus)]
-    checkpoints += selected_checkpoints
+    selected_checkpoints = [checkpoint_handler.get_next_checkpoint() for i in range(n_gpus)]
 
     # train and validate these checkpoints
     train(selected_checkpoints, trainloader)
