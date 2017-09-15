@@ -124,7 +124,8 @@ class Checkpoint(object):
                 os.remove(old_abspath)
 
         if log:
-            self.summary_writer.add_scalar(self.setting_str + '/val_loss', np.mean(self.accum_loss), self.minibatch_idx)
+            self.summary_writer.add_scalar(self.setting_str + '/validation/loss', np.mean(self.accum_loss), self.minibatch_idx)
+            self.summary_writer.add_scalar(self.setting_str + '/validation/accuracy', acc, self.minibatch_idx)
 
     def load_recent(self):
         # loads most recent model
@@ -201,8 +202,8 @@ class Checkpoint(object):
 
         if should_update:
             acc = 100.*self.correct/self.total
-            self.summary_writer.add_scalar(self.setting_str + '/train_loss', loss, self.minibatch_idx)
-            self.summary_writer.add_scalar(self.setting_str + '/accuracy', acc, self.minibatch_idx)
+            self.summary_writer.add_scalar(self.setting_str + '/train/loss', loss, self.minibatch_idx)
+            self.summary_writer.add_scalar(self.setting_str + '/train/accuracy', acc, self.minibatch_idx)
 
         return  loss
 
