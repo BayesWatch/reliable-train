@@ -201,7 +201,7 @@ class Checkpoint(object):
 
         if should_update:
             acc = 100.*self.correct/self.total
-            self.summary_writer.add_scalar(self.setting_str + '/train_loss', loss.data[0], self.minibatch_idx)
+            self.summary_writer.add_scalar(self.setting_str + '/train_loss', loss, self.minibatch_idx)
             self.summary_writer.add_scalar(self.setting_str + '/accuracy', acc, self.minibatch_idx)
 
         return  loss
