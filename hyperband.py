@@ -48,8 +48,9 @@ class Hyperband(object):
                 r_i = r*self.eta**(i)
 
                 self.val_losses = np.zeros(len(T))
+                self.prescription_idx = 0
                 
-                prescriptions = [(get_checkpoint(*t), r_i) for t in T]
+                prescriptions = ((get_checkpoint(*t), r_i) for t in T)
                 yield prescriptions
 
                 T = [T[i] for i in np.argsort(self.val_losses)[0:int(n_i/eta)]]
@@ -58,14 +59,19 @@ class Hyperband(object):
         while not all([pc[1]>0 for pc in prescriptions]):
             # return each checkpoint until they run out of prescribed epochs
             # then fill self.val_losses with the current losses and iterate the config generator
-            prescription = prescriptions.pop(0)
-            prescriptions.append(prescription)
+            prescription = prescriptions[self.prescription_idx]
+            if self.prescription_idx < len(prescriptions):
+                self.prescription_idx += 1
+            else:
+                self.prescription_idx = 0
 
             if prescription[1] > 0:
                 prescription[1] += -1
                 return prescription[0]
 
         # we must have run out of prescribed epochs, get some more
+        for i in range(len(self.val_losses)):
+            self.val_losses[i] = prescriptions[i][0].best_saved['loss']
         prescriptions = next(self.configuration_generator)
 
     def get_random_hyperparameter_configution(self):

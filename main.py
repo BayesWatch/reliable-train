@@ -92,17 +92,18 @@ def standard_schedule(decay_ratio, period, batch_idx):
 
 schedule = standard_schedule
 
-sys.stdout.write("Initialising candidate configurations...")
-rng = np.random.RandomState(42)
 learning_rates = np.exp(rng.uniform(low=np.log(0.01), high=np.log(0.2), size=32)) # uniform samples in the log space
 lr_decay_ratios = rng.uniform(low=0., high=0.5, size=32)
+def get_random_config(rng):
+    learning_rate = np.exp(rng.uniform(low=np.log(0.01), high=np.log(0.2)))
+    lr_decay = rng.uniform(low=0., high=0.5, size=32)
+    return learning_rate, lr_decay
+
 if 'VGG' in model_tag:
     model = lambda: VGG(model_tag) # model constructor
-checkpoints = []
-for initial_lr, lr_decay in zip(learning_rates, lr_decay_ratios):
-    checkpoints.append(Checkpoint(model, initial_lr, lr_decay, schedule, checkpoint_loc, log_loc))
-    sys.stdout.write('.'), sys.stdout.flush()
-sys.stdout.write('\n')
+
+def get_checkpoint(initial_lr, lr_decay):
+    return Checkpoint(model, initial_lr, lr_decay, schedule, checkpoint_loc, log_loc)
 
 def train(checkpoints, trainloader):
     for gpu_index, checkpoint in enumerate(selected_checkpoints):
