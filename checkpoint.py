@@ -108,10 +108,12 @@ class Checkpoint(object):
     def save_recent(self, clean=True, log=True):
         # save most recent model
         acc = 100.*self.correct/self.total
+        loss = np.mean(self.accum_loss)
         old_abspath = self.most_recent_saved['abspath']
         self.most_recent_saved = {}
         self.most_recent_saved['abspath'] = self.save(acc, self.epoch)
-        self.most_recent_saved['acc'] = 0.0
+        self.most_recent_saved['acc'] = acc
+        self.most_recent_saved['loss'] = loss
         self.most_recent_saved['epoch'] = self.epoch
 
         # change best to point to it if it's the best
@@ -124,7 +126,7 @@ class Checkpoint(object):
                 os.remove(old_abspath)
 
         if log:
-            self.summary_writer.add_scalar('/validation/loss', np.mean(self.accum_loss), self.minibatch_idx)
+            self.summary_writer.add_scalar('/validation/loss', loss, self.minibatch_idx)
             self.summary_writer.add_scalar('/validation/accuracy', acc, self.minibatch_idx)
 
     def load_recent(self):
