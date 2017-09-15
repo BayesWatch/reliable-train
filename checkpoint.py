@@ -204,6 +204,7 @@ class Checkpoint(object):
             acc = 100.*self.correct/self.total
             self.summary_writer.add_scalar(self.setting_str + '/train/loss', loss, self.minibatch_idx)
             self.summary_writer.add_scalar(self.setting_str + '/train/accuracy', acc, self.minibatch_idx)
+            self.summary_writer.add_scalar(self.setting_str + '/train/learning_rate', lr, self.minibatch_idx)
 
         return  loss
 
