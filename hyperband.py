@@ -21,6 +21,8 @@ class Hyperband(object):
     """
     def __init__(self, get_random_config, get_checkpoint, max_iter=180, eta=3.):
         self.eta, self.max_iter = eta, max_iter
+        self.get_random_config = get_random_config
+        self.get_checkpoint = get_checkpoint
         self.logeta = lambda x: math.log(x)/math.log(eta) # downsampling rate
         self.s_max = int(self.logeta(max_iter)) # number of unique executions of successive halving
         self.B = (self.s_max + 1)*max_iter # total no. of iterations per successive halving
@@ -32,12 +34,13 @@ class Hyperband(object):
         # initialise configuration generator
         self.config_generator = self.configuration_generator()
 
-        self.prescriptions = [(0,0)]
+        # get our first prescriptions
+        self.prescriptions = next(self.config_generator)
 
     def configuration_generator(self):
         for s in reversed(range(self.s_max+1)):
             # initial number of configurations
-            n = int(ceil(self.B/self.max_iter/(s+1)*self.eta**s))
+            n = int(math.ceil(self.B/self.max_iter/(s+1)*self.eta**s))
             # initial number of iterations to run configurations for
             r = self.max_iter*self.eta**(-s)
 
@@ -50,30 +53,37 @@ class Hyperband(object):
                 self.val_losses = np.zeros(len(T))
                 self.prescription_idx = 0
                 
-                prescriptions = ((get_checkpoint(*t), r_i) for t in T)
+                prescriptions = tuple([[self.get_checkpoint(*t), int(r_i)] for t in T])
                 yield prescriptions
 
                 T = [T[i] for i in np.argsort(self.val_losses)[0:int(n_i/eta)]]
 
     def get_next_checkpoint(self):
         while True:
-            while not all([pc[1]>0 for pc in prescriptions]):
+            while any([pc[1]>0 for pc in self.prescriptions]):
                 # return each checkpoint until they run out of prescribed epochs
                 # then fill self.val_losses with the current losses and iterate the config generator
-                prescription = prescriptions[self.prescription_idx]
-                if self.prescription_idx < len(prescriptions):
+                if self.prescription_idx < len(self.prescriptions):
+                    prescription = self.prescriptions[self.prescription_idx]
                     self.prescription_idx += 1
                 else:
                     self.prescription_idx = 0
+                    prescription = self.prescriptions[self.prescription_idx]
 
                 if prescription[1] > 0:
                     prescription[1] += -1
                     return prescription[0]
 
             # we must have run out of prescribed epochs, get some more
+            print("Getting next prescribed epochs...")
             for i in range(len(self.val_losses)):
-                self.val_losses[i] = prescriptions[i][0].best_saved['loss']
-            prescriptions = next(self.configuration_generator)
+                self.val_losses[i] = self.prescriptions[i][0].best_saved['loss']
+            try:
+                self.prescriptions = next(self.configuration_generator)
+            except StopIteration as e:
+                print("Finished finite horizon loop, starting again...")
+                # initialise configuration generator
+                self.config_generator = self.configuration_generator()
 
     def get_random_hyperparameter_configution(self):
         raise NotImplementedError()

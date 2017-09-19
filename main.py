@@ -94,11 +94,9 @@ def standard_schedule(decay_ratio, period, batch_idx):
 schedule = standard_schedule
 
 print("Initialising hyperband...")
-learning_rates = np.exp(rng.uniform(low=np.log(0.01), high=np.log(0.2), size=32)) # uniform samples in the log space
-lr_decay_ratios = rng.uniform(low=0., high=0.5, size=32)
 def get_random_config(rng):
     learning_rate = np.exp(rng.uniform(low=np.log(0.01), high=np.log(0.2)))
-    lr_decay = rng.uniform(low=0., high=0.5, size=32)
+    lr_decay = rng.uniform(low=0., high=0.5)
     return learning_rate, lr_decay
 
 if 'VGG' in model_tag:
@@ -107,7 +105,7 @@ if 'VGG' in model_tag:
 def get_checkpoint(initial_lr, lr_decay):
     return Checkpoint(model, initial_lr, lr_decay, schedule, checkpoint_loc, log_loc)
 
-checkpoint_handler = Hyperband
+checkpoint_handler = Hyperband(get_random_config, get_checkpoint)
 
 def train(checkpoints, trainloader):
     for gpu_index, checkpoint in enumerate(selected_checkpoints):
@@ -147,6 +145,7 @@ def validate(checkpoints, valloader, save=False):
         for checkpoint in checkpoints:
             checkpoint.save_recent()
 
+print("Beginning search...")
 while True:
     # choose a subset of the candidate models and init for training and validation
     selected_checkpoints = [checkpoint_handler.get_next_checkpoint() for i in range(n_gpus)]
