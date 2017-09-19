@@ -284,20 +284,6 @@ def gridfile_parse(file_object):
             combinations.append(("%06.3f"%float(lr), "%05d"%int(period)))
     return combinations
 
-def existing_checkpoints(checkpoint_loc):
-    # should return dictionary of settings containing file locations and validation accuracies
-    checkpoint_filenames = os.listdir(checkpoint_loc)
-    existing_checkpoints = {}
-    for n in checkpoint_filenames:
-        lr, period, score = parse_filename(n)
-        try:
-            old_score = existing_checkpoints[(lr, period)]['acc']
-            if float(score) > float(old_score):
-                existing_checkpoints[(lr, period)] = {'acc':score, 'abspath':os.path.join(checkpoint_loc, n)}
-        except KeyError:
-            existing_checkpoints[(lr, period)] = {'acc':score, 'abspath':os.path.join(checkpoint_loc, n)}
-    return existing_checkpoints
-
 def write_status(log_filename, checkpoint_loc, sgdr_or_not):
     print("Writing to log file...")
     with open("grid_%s.csv"%("sgdr" if sgdr_or_not else "default"), "r") as f:

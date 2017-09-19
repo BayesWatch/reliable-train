@@ -14,7 +14,7 @@ from torch.autograd import Variable
 
 import numpy as np
 
-from utils import format_filename, gridfile_parse, existing_checkpoints, \
+from utils import format_filename, gridfile_parse, \
     write_status, clean_checkpoints, get_summary_writer, format_settings_str, parse_filename
 
 class Checkpoint(object):
