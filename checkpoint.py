@@ -87,17 +87,18 @@ class Checkpoint(object):
             self.net = model()            
 
             # save initialised checkpoint
-            save_path = self.save(0.0, 0)
-            self.best_saved = {'acc':0.0, 'abspath':save_path, 'epoch': 0}
+            save_path = self.save(0.0, 100.0, 0)
+            self.best_saved = {'acc':0.0, 'abspath':save_path, 'epoch': 0, 'loss': 100.0}
             self.most_recent_saved = self.best_saved
 
             # delete network
             del self.net
 
-    def save(self, acc, epoch):
+    def save(self, acc, loss, epoch):
         state = {
             'net': self.net,
             'acc': acc,
+            'loss': loss,
             'epoch': epoch}
 
         filename = format_filename(self.initial_lr, self.lr_decay, acc, epoch)
@@ -111,7 +112,7 @@ class Checkpoint(object):
         loss = np.mean(self.accum_loss)
         old_abspath = self.most_recent_saved['abspath']
         self.most_recent_saved = {}
-        self.most_recent_saved['abspath'] = self.save(acc, self.epoch)
+        self.most_recent_saved['abspath'] = self.save(acc, loss, self.epoch)
         self.most_recent_saved['acc'] = acc
         self.most_recent_saved['loss'] = loss
         self.most_recent_saved['epoch'] = self.epoch
@@ -123,7 +124,11 @@ class Checkpoint(object):
         if clean:
             # remove the old one if it's not the best
             if old_abspath != self.best_saved['abspath']:
-                os.remove(old_abspath)
+                try:
+                    os.remove(old_abspath)
+                except:
+                    import pdb
+                    pdb.set_trace()
 
         if log:
             self.summary_writer.add_scalar('/validation/loss', loss, self.minibatch_idx)

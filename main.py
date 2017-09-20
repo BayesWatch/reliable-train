@@ -25,6 +25,8 @@ from checkpoint import Checkpoint
 from hyperband import Hyperband
 from data import cifar10
 
+from itertools import combinations
+
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--data', '-d', default=os.environ.get('SCRATCH',os.getcwd()), help='place to store data')
 #parser.add_argument('--sgdr', action='store_true', help='use the SGDR learning rate schedule')
@@ -35,7 +37,7 @@ best_acc = 0  # best test accuracy
 
 n_gpus = torch.cuda.device_count()
 
-trainloader, valloader, _ = cifar10(args.args.data)
+trainloader, valloader, _ = cifar10(args.data)
 
 model_tag = 'VGG16'
 checkpoint_loc = os.path.join(args.data, 'checkpoint', model_tag)
@@ -108,9 +110,19 @@ def validate(checkpoints, loader, save=False):
             checkpoint.save_recent()
 
 print("Beginning search...")
+leftover = []
 while True:
     # choose a subset of the candidate models and init for training and validation
-    selected_checkpoints = [checkpoint_handler.get_next_checkpoint() for i in range(n_gpus)]
+    selected_checkpoints = []
+    new_checkpoints = [checkpoint_handler.get_next_checkpoint() for i in
+                       range(n_gpus-len(leftover))] + leftover
+
+    leftover = []
+    for i, checkpoint in enumerate(new_checkpoints):
+        if checkpoint not in selected_checkpoints:
+            selected_checkpoints.append(checkpoint)
+        else:
+            leftover.append(checkpoint)
 
     # train and validate these checkpoints
     train(selected_checkpoints, trainloader)
@@ -118,4 +130,8 @@ while True:
 
     # clear checkpoints
     for checkpoint in selected_checkpoints:
-        checkpoint.clear()
+        try:
+            checkpoint.clear()
+        except:
+            import pdb
+            pdb.set_trace()

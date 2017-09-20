@@ -1,4 +1,6 @@
 '''Data loading utility'''
+import os
+
 import torch
 
 import torchvision
@@ -35,10 +37,12 @@ def cifar10(scratch_loc):
     data_save_loc = os.path.join(scratch_loc, 'data')
     print("Data saved to: %s"%data_save_loc)
     trainvalset = torchvision.datasets.CIFAR10(root=data_save_loc, train=True, download=True, transform=transform_train)
-    trainset = PartialDataset(trainvalset, 0, 40000)
+    #trainset = PartialDataset(trainvalset, 0, 40000)
+    trainset = PartialDataset(trainvalset, 0, 256)
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=128, shuffle=True, num_workers=2)
 
-    valset = PartialDataset(trainvalset, 40000, 10000)
+    #valset = PartialDataset(trainvalset, 40000, 10000)
+    valset = PartialDataset(trainvalset, 40000, 1000)
     valloader = torch.utils.data.DataLoader(valset, batch_size=100, shuffle=False, num_workers=2)
 
     testset = torchvision.datasets.CIFAR10(root=data_save_loc, train=False, download=True, transform=transform_test)
