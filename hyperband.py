@@ -85,9 +85,9 @@ class Hyperband(object):
                     import pdb
                     pdb.set_trace()
 
-                if prescription[1] > 0:
-                    prescription[1] += -1
-                    return prescription[0]
+                if prescription['iterations'] > 0:
+                    prescription['iterations'] += -1
+                    return prescription['checkpoint']
 
             # we must have run out of prescribed epochs, get some more
             print("Getting next prescribed epochs...")
