@@ -34,8 +34,8 @@ class Hyperband(object):
         # initialise configuration generator
         self.configs = self.configuration_generator()
 
-        # get our first prescriptions
-        self.prescriptions = next(self.configs)
+        # initialise queue
+        self.queue = []
 
     def configuration_generator(self):
         for s in reversed(range(self.s_max+1)):
@@ -50,55 +50,31 @@ class Hyperband(object):
                 n_i = n*self.eta**(-i)
                 r_i = r*self.eta**(i)
 
-                self.val_losses = np.zeros(len(T))
+                self.val_losses = 100.*np.ones(len(T))
                 self.prescription_idx = 0
                 
-                new_prescriptions = tuple([{'checkpoint':self.get_checkpoint(*t), 'iterations':int(r_i)} for t in T])
-                prescriptions, T_new = [], []
-                setting_strs = []
-                for p_idx, p in enumerate(prescriptions):
-                    setting_str = p['checkpoint'].setting_str
-                    if setting_str in setting_strs:
-                        # we can't have setting collisions
-                        print("Found setting collision: %s"%setting_str)
-                    else:
-                        prescriptions.append(p)
-                        T_new.append(T[p_idx])
-                    setting_strs.append(setting_str)
-                T = T_new
-                yield prescriptions
+                for _ in range(int(r_i)):
+                    for t_idx, t in enumerate(T):
+                        yield t_idx, t
 
                 T = [T[i] for i in np.argsort(self.val_losses)[0:int(n_i/self.eta)]]
 
-    def get_next_checkpoint(self):
-        while True:
-            while any([pc[1]>0 for pc in self.prescriptions]):
-                # return each checkpoint until they run out of prescribed epochs
-                # then fill self.val_losses with the current losses and iterate the config generator
-                if self.prescription_idx < (len(self.prescriptions)-1):
-                    self.prescription_idx += 1
-                else:
-                    self.prescription_idx = 0
-                try:
-                    prescription = self.prescriptions[self.prescription_idx]
-                except:
-                    import pdb
-                    pdb.set_trace()
+    def populate_queue(self, n):
+        # try to add item, destroy checkpoint if it already exists 
+        while len(self.queue) < n:
+            idx, settings = next(self.configs)
+            checkpoint = self.get_checkpoint(*settings)
+            if checkpoint.setting_str not in [c.setting_str for c in
+                                              self.queue]:
+                self.queue.append((idx, checkpoint))
+            else:
+                del checkpoint
 
-                if prescription['iterations'] > 0:
-                    prescription['iterations'] += -1
-                    return prescription['checkpoint']
+    def update_losses(self, losses, idxs):
+        for i in range(len(self.val_losses)):
+            self.val_losses[i] = self.prescriptions[i]['checkpoint'].best_saved.get('loss', 100.0)
 
-            # we must have run out of prescribed epochs, get some more
-            print("Getting next prescribed epochs...")
-            for i in range(len(self.val_losses)):
-                self.val_losses[i] = self.prescriptions[i][0].best_saved.get('loss', 100.0)
-            try:
-                self.prescriptions = next(self.configs)
-            except StopIteration as e:
-                print("Finished finite horizon loop, starting again...")
-                # initialise configuration generator
-                self.configs = self.configuration_generator()
+    
 
     def get_random_hyperparameter_configution(self):
         raise NotImplementedError()

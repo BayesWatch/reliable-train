@@ -113,20 +113,18 @@ print("Beginning search...")
 leftover = []
 while True:
     # choose a subset of the candidate models and init for training and validation
-    selected_checkpoints = []
-    new_checkpoints = [checkpoint_handler.get_next_checkpoint() for i in
-                       range(n_gpus-len(leftover))] + leftover
-
-    leftover = []
-    for i, checkpoint in enumerate(new_checkpoints):
-        if checkpoint not in selected_checkpoints:
-            selected_checkpoints.append(checkpoint)
-        else:
-            leftover.append(checkpoint)
+    checkpoint.populate_queue(n_gpus)
+    selected_checkpoints, idxs = [], []
+    for i in range(n_gpus):
+        idx, checkpoint = checkpoint.queue.pop(0)
+        idxs.append(idx)
+        selected_checkpoints.append(checkpoint)
 
     # train and validate these checkpoints
     train(selected_checkpoints, trainloader)
     validate(selected_checkpoints, valloader, save=True)
+
+    # update losses
 
     # clear checkpoints
     for checkpoint in selected_checkpoints:
@@ -135,3 +133,5 @@ while True:
         except:
             import pdb
             pdb.set_trace()
+    # then destroy them (paranoid, because clear should happen when we del)
+    del selected_checkpoints
