@@ -44,10 +44,12 @@ class Hyperband(object):
             input("Running with %i configurations, max %i iterations, OK?"%(n,max_runnable))
 
             T = [ self.get_random_config(self.rng) for i in range(n) ]
+            E = 0 # epochs already run
             for i in range(s+1):
                 # run each config for r_i iterations
                 n_i = n*self.eta**(-i)
                 r_i = r*self.eta**(i)
+                r_i = r_i - E
                 print("    %i configurations left, running for %i iterations"%(len(T), r_i))
 
                 self.val_losses = 100.*np.ones(len(T))
@@ -56,6 +58,7 @@ class Hyperband(object):
                 for _ in range(int(r_i)):
                     for t_idx, t in enumerate(T):
                         yield t_idx, t
+                    E += 1
                 if len(self.queue) > 0:
                     print("finishing queue:", self.queue)
                     # if we still have something in the queue, don't continue
