@@ -73,7 +73,6 @@ class Checkpoint(object):
             if self.setting_str == "_".join(e[0]):
                 if e[1]['acc'] > self.best_saved['acc']:
                     self.best_saved = e[1]
-                    print("Best for %s: %s"%(self.setting_str, self.best_saved['abspath']))
                 if e[1]['epoch'] > self.most_recent_saved['epoch']:
                     self.most_recent_saved = e[1]
 
@@ -101,7 +100,7 @@ class Checkpoint(object):
             'loss': loss,
             'epoch': epoch}
 
-        filename = format_filename(self.initial_lr, self.lr_decay, acc, epoch)
+        filename = format_filename(self.initial_lr, self.lr_decay, acc, loss, epoch)
         save_path = os.path.join(self.checkpoint_loc, filename)
         torch.save(state, save_path)
         return save_path 
@@ -136,15 +135,16 @@ class Checkpoint(object):
 
     def load_recent(self):
         # loads most recent model
+        print("Loading from %s"%self.most_recent_saved['abspath'])
         state = torch.load(self.most_recent_saved['abspath'])
-        return state['net'], state['acc'], state['epoch']
+        return state['net'], state['acc'], state['loss'], state['epoch']
 
     def init_for_epoch(self, gpu_index, should_update, epoch_size=None):
         self.gpu_index = gpu_index
 
         # load most recent params if we have none
         if 'net' not in self.__dict__:
-            self.net, acc, self.epoch = self.load_recent()
+            self.net, acc, loss, self.epoch = self.load_recent()
         self.net.cuda(self.gpu_index)
 
         # always set up criterion and optimiser
@@ -231,8 +231,8 @@ def existing_checkpoints(checkpoint_loc):
     checkpoint_filenames = os.listdir(checkpoint_loc)
     existing_checkpoints = []
     for n in checkpoint_filenames:
-        lr, decay, acc, epoch = parse_filename(n)
-        existing_checkpoints.append(((lr, decay), {'acc':float(acc),
+        lr, decay, acc, loss, epoch = parse_filename(n)
+        existing_checkpoints.append(((lr, decay), {'acc':float(acc), 'loss':float(loss),
             'abspath':os.path.join(checkpoint_loc, n), 'epoch': int(epoch)}))
     return existing_checkpoints
 

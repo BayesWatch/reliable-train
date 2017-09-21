@@ -69,7 +69,7 @@ if 'VGG' in model_tag:
 def get_checkpoint(initial_lr, lr_decay):
     return Checkpoint(model, initial_lr, lr_decay, schedule, checkpoint_loc, log_loc)
 
-checkpoint_handler = Hyperband(get_random_config, get_checkpoint)
+checkpoint_handler = Hyperband(get_random_config)
 
 def train(checkpoints, trainloader):
     for gpu_index, checkpoint in enumerate(selected_checkpoints):
@@ -109,22 +109,29 @@ def validate(checkpoints, loader, save=False):
         for checkpoint in checkpoints:
             checkpoint.save_recent()
 
+    try:
+        return [c.best_saved['loss'] for c in checkpoints]
+    except:
+        import pdb
+        pdb.set_trace()
+
 print("Beginning search...")
 leftover = []
 while True:
     # choose a subset of the candidate models and init for training and validation
-    checkpoint.populate_queue(n_gpus)
+    checkpoint_handler.populate_queue(n_gpus)
     selected_checkpoints, idxs = [], []
-    for i in range(n_gpus):
-        idx, checkpoint = checkpoint.queue.pop(0)
+    for idx, settings in checkpoint_handler.queue:
         idxs.append(idx)
-        selected_checkpoints.append(checkpoint)
+        selected_checkpoints.append(get_checkpoint(*settings))
+    checkpoint_handler.queue = []
 
     # train and validate these checkpoints
     train(selected_checkpoints, trainloader)
-    validate(selected_checkpoints, valloader, save=True)
+    losses = validate(selected_checkpoints, valloader, save=True)
 
     # update losses
+    checkpoint_handler.update(losses, idxs)
 
     # clear checkpoints
     for checkpoint in selected_checkpoints:

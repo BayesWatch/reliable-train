@@ -13,6 +13,8 @@ import torch
 import torch.nn as nn
 import torch.nn.init as init
 
+import numpy as np
+
 try:
     from tensorboard import SummaryWriter
     def get_summary_writer(log_loc, settings):
@@ -254,21 +256,24 @@ def format_time(seconds):
 def parse_filename(filename):
     """Filename contains details about learning rate, period and test time
     score. Parse these out."""
-    lr, period, score, epoch = filename[:-3].split("_")
-    score = ".".join(score.split(".")[:-1])
-    return lr, period, score, epoch
+    lr, period, acc, loss, epoch = filename[:-3].split("_")
+    return lr, period, acc, loss, epoch
 
 def format_settings_str(*settings):
     str_components = []
     for s in settings:
-        if type(s) == float:
+        if type(s) is float:
             str_components.append("%06.3f"%s)
-        elif type(s) == int:
+        elif type(s) is int:
             str_components.append("%05d"%s)
+        elif isinstance(s, np.float):
+            str_components.append("%06.3f"%s)
+        else:
+            raise ValueError("%s of type %s is not a valid entry"%(s, type(s)))
     return "_".join(str_components)
 
-def format_filename(lr, decay, acc, epoch):
-    fname_string = format_settings_str(lr, decay, acc, epoch)
+def format_filename(lr, decay, acc, loss, epoch):
+    fname_string = format_settings_str(lr, decay, acc, loss, epoch)
     return fname_string+".t7"
 
 def gridfile_parse(file_object):
