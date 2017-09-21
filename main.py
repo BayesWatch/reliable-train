@@ -75,8 +75,9 @@ def train(checkpoints, trainloader):
     for gpu_index, checkpoint in enumerate(selected_checkpoints):
         checkpoint.init_for_epoch(gpu_index, should_update=True, epoch_size=len(trainloader))
 
-
-    for batch_idx, (inputs, targets) in enumerate(trainloader):
+    batch_idx = 0
+    for inputs, targets in trainloader:
+        batch_idx += 1
         propagate = lambda ckpt: ckpt.propagate(inputs, targets, batch_idx, should_update=True)
         # overhead of creating executor in single thread experiment was not noticeable
         with ThreadPoolExecutor(max_workers=n_gpus) as executor:
@@ -95,7 +96,9 @@ def validate(checkpoints, loader, save=False):
     for gpu_index, checkpoint in enumerate(checkpoints):
         checkpoint.init_for_epoch(gpu_index, should_update=False)
 
-    for batch_idx, (inputs, targets) in enumerate(loader):
+    batch_idx = 0
+    for inputs, targets in loader:
+        batch_idx += 1
         propagate = lambda ckpt: ckpt.propagate(inputs, targets, batch_idx, should_update=False)
         with ThreadPoolExecutor(max_workers=4) as executor:
             results = executor.map(propagate, checkpoints)
@@ -127,18 +130,28 @@ while True:
     checkpoint_handler.queue = []
 
     # train and validate these checkpoints
-    train(selected_checkpoints, trainloader)
-    losses = validate(selected_checkpoints, valloader, save=True)
+    try:
+        train(selected_checkpoints, trainloader)
+    except Exception as e:
+        print("Warning, hit %s"%str(e))
+        print("Trying again with new dataset...")
+        del (trainloader, valloader)
+        trainloader, valloader, _ = cifar10(args.data)
+        train(selected_checkpoints, trainloader)
+    try:
+        losses = validate(selected_checkpoints, valloader, save=True)
+    except Exception as e:
+        print("Warning, hit %s"%str(e))
+        print("Trying again with new dataset...")
+        del (trainloader, valloader)
+        trainloader, valloader, _ = cifar10(args.data)
+        losses = validate(selected_checkpoints, valloader, save=True)
 
     # update losses
     checkpoint_handler.update(losses, idxs)
 
     # clear checkpoints
     for checkpoint in selected_checkpoints:
-        try:
-            checkpoint.clear()
-        except:
-            import pdb
-            pdb.set_trace()
+        checkpoint.clear()
     # then destroy them (paranoid, because clear should happen when we del)
     del selected_checkpoints

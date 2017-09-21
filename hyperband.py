@@ -17,7 +17,7 @@ class Hyperband(object):
         max_iter: maximum number of iterations per configuration.
         eta: defines downsampling rate (default=3)
     """
-    def __init__(self, get_random_config, max_iter=180, eta=3.):
+    def __init__(self, get_random_config, max_iter=180., eta=3.):
         self.eta, self.max_iter = eta, max_iter
         self.get_random_config = get_random_config
         self.logeta = lambda x: math.log(x)/math.log(eta) # downsampling rate
@@ -37,16 +37,18 @@ class Hyperband(object):
     def configuration_generator(self):
         for s in reversed(range(self.s_max+1)):
             # initial number of configurations
-            n = int(math.ceil(self.B/self.max_iter/(s+1)*self.eta**s))
+            n = int(math.ceil(((self.B/self.max_iter)/(s+1))*self.eta**s))
             # initial number of iterations to run configurations for
             r = self.max_iter*self.eta**(-s)
-            print("Running with %i configurations, max %i iterations."%(n,r))
+            max_runnable = sum([r*self.eta**(i) for i in range(s+1)])
+            input("Running with %i configurations, max %i iterations, OK?"%(n,max_runnable))
 
             T = [ self.get_random_config(self.rng) for i in range(n) ]
             for i in range(s+1):
                 # run each config for r_i iterations
                 n_i = n*self.eta**(-i)
                 r_i = r*self.eta**(i)
+                print("    %i configurations left, running for %i iterations"%(len(T), r_i))
 
                 self.val_losses = 100.*np.ones(len(T))
                 self.prescription_idx = 0
@@ -75,7 +77,6 @@ class Hyperband(object):
                     self.pending = None
                 else:
                     # if it is in there, don't make queue any bigger
-                    print("repeated entry found")
                     break
             else:
                 self.pending = None

@@ -17,7 +17,8 @@ class PartialDataset(torch.utils.data.Dataset):
         return self.length
     def __getitem__(self, i):
         return self.parent_ds[i+self.offset]
-
+    def __del__(self):
+        self.parent_ds._shutdown_workers()
 
 def cifar10(scratch_loc):
     # Data
