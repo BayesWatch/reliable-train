@@ -69,7 +69,7 @@ if 'VGG' in model_tag:
 def get_checkpoint(initial_lr, lr_decay):
     return Checkpoint(model, initial_lr, lr_decay, schedule, checkpoint_loc, log_loc)
 
-checkpoint_handler = Hyperband(get_random_config)
+checkpoint_handler = Hyperband(get_random_config, max_iter=10.)
 
 def train(checkpoints, trainloader):
     for gpu_index, checkpoint in enumerate(selected_checkpoints):
@@ -130,22 +130,8 @@ while True:
     checkpoint_handler.queue = []
 
     # train and validate these checkpoints
-    try:
-        train(selected_checkpoints, trainloader)
-    except Exception as e:
-        print("Warning, hit %s"%str(e))
-        print("Trying again with new dataset...")
-        del (trainloader, valloader)
-        trainloader, valloader, _ = cifar10(args.data)
-        train(selected_checkpoints, trainloader)
-    try:
-        losses = validate(selected_checkpoints, valloader, save=True)
-    except Exception as e:
-        print("Warning, hit %s"%str(e))
-        print("Trying again with new dataset...")
-        del (trainloader, valloader)
-        trainloader, valloader, _ = cifar10(args.data)
-        losses = validate(selected_checkpoints, valloader, save=True)
+    train(selected_checkpoints, trainloader)
+    losses = validate(selected_checkpoints, valloader, save=True)
 
     # update losses
     checkpoint_handler.update(losses, idxs)

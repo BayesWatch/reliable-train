@@ -41,7 +41,7 @@ class Hyperband(object):
             # initial number of iterations to run configurations for
             r = self.max_iter*self.eta**(-s)
             max_runnable = sum([r*self.eta**(i) for i in range(s+1)])
-            input("Running with %i configurations, max %i iterations, OK?"%(n,max_runnable))
+            print("Running with %i configurations, max %i iterations, OK?"%(n,max_runnable))
 
             T = [ self.get_random_config(self.rng) for i in range(n) ]
             E = 0 # epochs already run
