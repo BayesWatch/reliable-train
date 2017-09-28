@@ -14,9 +14,6 @@ from torch.autograd import Variable
 
 import numpy as np
 
-from utils import format_filename, gridfile_parse, \
-    write_status, clean_checkpoints, get_summary_writer, format_settings_str, parse_filename
-
 class Checkpoint(object):
     """
     Takes a set of hyperparameter settings, looks for existing checkpoints with
@@ -40,20 +37,24 @@ class Checkpoint(object):
         initial_lr: the initial setting of learning rate, regardless
             of schedule.
         lr_decay: the size of each decay step
+        minibatch_size: size of minibatch to use
         lr_schedule: a function defining the learning rate schedule, itself
             taking (period, batch_index) as arguments.
         checkpoint_loc: location to save checkpoints to.
         log_loc: location to save logs to
     """
-    def __init__(self, model, initial_lr, lr_decay, lr_schedule, checkpoint_loc, log_loc):
+    def __init__(self, model, initial_lr, lr_decay, minibatch_size,
+                 lr_schedule, checkpoint_loc, log_loc, verbose=False):
+        self.v = verbose
         # check cuda availability
         self.use_cuda = torch.cuda.is_available()
 
         # store settings
         self.initial_lr = float(initial_lr)
         self.lr_decay = float(lr_decay)
+        self.minibatch_size = int(minibatch_size)
         # string describing settings canonically
-        self.setting_str = format_settings_str(self.initial_lr, self.lr_decay)
+        self.setting_str = format_settings_str(self.initial_lr, self.lr_decay, self.minibatch_size)
         self.checkpoint_loc = checkpoint_loc
         # store learning rate schedule
         self.lr_schedule = lambda batch_index, period: lr_schedule(self.lr_decay, period, batch_index)
@@ -75,6 +76,7 @@ class Checkpoint(object):
                     self.best_saved = e[1]
                 if e[1]['epoch'] > self.most_recent_saved['epoch']:
                     self.most_recent_saved = e[1]
+                    self.epoch = self.most_recent_saved['epoch']
 
         # count minibatches in total
         self.minibatch_idx = 0
@@ -101,7 +103,7 @@ class Checkpoint(object):
             'loss': loss,
             'epoch': epoch}
 
-        filename = format_filename(self.initial_lr, self.lr_decay, acc, loss, epoch)
+        filename = format_filename(self.initial_lr, self.lr_decay, self.minibatch_size, acc, loss, epoch)
         save_path = os.path.join(self.checkpoint_loc, filename)
         torch.save(state, save_path)
         return save_path 
@@ -136,7 +138,8 @@ class Checkpoint(object):
 
     def load_recent(self):
         # loads most recent model
-        print("Loading from %s"%self.most_recent_saved['abspath'])
+        if self.v:
+            print("Loading from %s"%self.most_recent_saved['abspath'])
         state = torch.load(self.most_recent_saved['abspath'])
         return state['net'], state['acc'], state['loss'], state['epoch']
 
@@ -218,8 +221,8 @@ class Checkpoint(object):
 
     def progress(self):
         acc = 100.*self.correct/self.total
-        return '| %.3f | %.3f%% |'\
-            % (np.mean(self.accum_loss), acc)
+        return '| %i | %.3f | %.3f%% |'\
+            % (self.epoch, np.mean(self.accum_loss), acc)
 
     def clear(self):
         del self.net
@@ -227,19 +230,57 @@ class Checkpoint(object):
     def __repr__(self):
         return self.setting_str
 
+
 def existing_checkpoints(checkpoint_loc):
     # should return dictionary of settings containing file locations and validation accuracies
     checkpoint_filenames = os.listdir(checkpoint_loc)
     existing_checkpoints = []
     for n in checkpoint_filenames:
-        lr, decay, acc, loss, epoch = parse_filename(n)
-        existing_checkpoints.append(((lr, decay), {'acc':float(acc), 'loss':float(loss),
+        lr, decay, minibatch_size, acc, loss, epoch = n[:-3].split("_")
+        existing_checkpoints.append(((lr, decay, minibatch_size), {'acc':float(acc), 'loss':float(loss),
             'abspath':os.path.join(checkpoint_loc, n), 'epoch': int(epoch)}))
     return existing_checkpoints
+
 
 def set_optimizer_lr(optimizer, lr):
     # callback to set the learning rate in an optimizer, without rebuilding the whole optimizer
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
     return optimizer
+
+
+def format_filename(lr, decay, minibatch_size, acc, loss, epoch):
+    fname_string = format_settings_str(lr, decay, minibatch_size, acc, loss, epoch)
+    return fname_string+".t7"
+
+
+def format_settings_str(*settings):
+    str_components = []
+    for s in settings:
+        if type(s) is float:
+            str_components.append("%06.3f"%s)
+        elif type(s) is int:
+            str_components.append("%05d"%s)
+        elif isinstance(s, np.float):
+            str_components.append("%06.3f"%s)
+        else:
+            raise ValueError("%s of type %s is not a valid entry"%(s, type(s)))
+    return "_".join(str_components)
+
+
+try:
+    from tensorboard import SummaryWriter
+    def get_summary_writer(log_loc, settings):
+        # save to subdir describing the hyperparam settings
+        dirname = format_settings_str(*settings)
+        return SummaryWriter(os.path.join(log_loc, dirname))
+except ImportError:
+    print("tensorboard-pytorch not detected, will not write plot logs anywhere")
+    class DummyWriter(object):
+        def __init__(self, log_dir):
+            return None
+        def add_scalar(self, tag, scalar_value, global_step):
+            return None
+    def get_summary_writer(log_loc, settings):
+        return DummyWriter(log_loc)
 

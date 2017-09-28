@@ -19,21 +19,21 @@ from torch.autograd import Variable
 
 import numpy as np
 
-from utils import gridfile_parse, write_status, \
-        clean_checkpoints, get_summary_writer, progress_bar
+from utils import ProgressBar
 from checkpoint import Checkpoint
 from hyperband import Hyperband
 from data import cifar10
 
 from itertools import combinations
 
-if __name__ == '__main__':
+def parse():
     parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training\nlearning rate will decay every 60 epochs')
     parser.add_argument('--scratch', '-s', default=os.environ.get('SCRATCH',os.getcwd()), help='place to store data')
     parser.add_argument('--lr', default=0.1, help='learning rate')
     parser.add_argument('--lr_decay', default=0.01, help='learning rate decay coefficient')
     parser.add_argument('--minibatch', '-M', default=128, help='minibatch size')
     parser.add_argument('--epochs', '-N', default=180, help='number of epochs to train for')
+    parser.add_argument('--gpu', default=0, help='index of gpu to use')
     parser.add_argument('-v', action='store_true', help='verbose with progress bar')
     #parser.add_argument('--sgdr', action='store_true', help='use the SGDR learning rate schedule')
     args = parser.parse_args()
@@ -48,20 +48,22 @@ def main(args):
 
     n_gpus = torch.cuda.device_count()
 
-    trainloader, valloader, _ = cifar10(args.scratch)
+    trainloader, valloader, _ = cifar10(args.scratch, args.minibatch)
 
     # Set where to save and load checkpoints, use model_tag for directory name
     model_tag = 'VGG16'
     checkpoint_loc = os.path.join(args.scratch, 'checkpoint', model_tag)
     if not os.path.isdir(checkpoint_loc):
         os.makedirs(checkpoint_loc)
-    print("Checkpoints saved to: %s"%checkpoint_loc)
+    if args.v:
+        print("Checkpoint saved to: %s"%checkpoint_loc)
 
     # Set where to append tensorboard logs
     log_loc = os.path.join(args.scratch, 'logs', model_tag)
     if not os.path.isdir(log_loc):
         os.makedirs(log_loc)
-    print("Tensorboard logs saved to: %s"%log_loc)
+    if args.v:
+        print("Tensorboard logs saved to: %s"%log_loc)
 
     # define learning rate schedule and make it the default
     # generalised so it would work with any schedule definable with mbatch index
@@ -77,11 +79,11 @@ def main(args):
         model = lambda: VGG(model_tag) # model constructor
     def get_checkpoint(initial_lr, lr_decay, minibatch_size):
         return Checkpoint(model, initial_lr, lr_decay, minibatch_size,
-                schedule, checkpoint_loc, log_loc)
+                schedule, checkpoint_loc, log_loc, verbose=args.v)
     checkpoint = get_checkpoint(args.lr, args.lr_decay, args.minibatch)
 
     def train(checkpoint, trainloader):
-        checkpoint.init_for_epoch(gpu_index, should_update=True, epoch_size=len(trainloader))
+        checkpoint.init_for_epoch(args.gpu, should_update=True, epoch_size=len(trainloader))
 
         batch_idx = 0
         for inputs, targets in trainloader:
@@ -93,11 +95,10 @@ def main(args):
                 progress_str += checkpoint.progress()
                 progress_bar(batch_idx, len(trainloader), progress_str)
 
-        for checkpoint in checkpoints:
-            checkpoint.epoch += 1
+        checkpoint.epoch += 1
 
     def validate(checkpoint, loader, save=False):
-        checkpoint.init_for_epoch(gpu_index, should_update=False)
+        checkpoint.init_for_epoch(args.gpu, should_update=False)
 
         batch_idx = 0
         for inputs, targets in loader:
@@ -116,5 +117,8 @@ def main(args):
 
     for epoch in range(args.epochs - checkpoint.epoch):
         # train and validate this checkpoint
-        train(selected_checkpoints, trainloader)
-        losses = validate(selected_checkpoints, valloader, save=True)
+        train(checkpoint, trainloader)
+        losses = validate(checkpoint, valloader, save=True)
+
+if __name__ == '__main__':
+    parse()

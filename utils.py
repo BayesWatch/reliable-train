@@ -15,21 +15,6 @@ import torch.nn.init as init
 
 import numpy as np
 
-try:
-    from tensorboard import SummaryWriter
-    def get_summary_writer(log_loc, settings):
-        # save to subdir describing the hyperparam settings
-        dirname = format_settings_str(*settings)
-        return SummaryWriter(os.path.join(log_loc, dirname))
-except ImportError:
-    print("tensorboard-pytorch not detected, will not write plot logs anywhere")
-    class DummyWriter(object):
-        def __init__(self, log_dir):
-            return None
-        def add_scalar(self, tag, scalar_value, global_step):
-            return None
-    def get_summary_writer(log_loc, settings):
-        return DummyWriter(log_loc)
 
 def get_num_gen(gen):
     return sum(1 for x in gen)
@@ -177,14 +162,15 @@ class ProgressBar(object):
             term_width = 80
 
         TOTAL_BAR_LENGTH = 65.
-        last_time = time.time()
-        begin_time = last_time
         self.__dict__.update(locals())
+        self.last_time = time.time()
+        self.begin_time = self.last_time
         
     def __call__(self, current, total, msg=None):
-        last_time, begin_time = self.last_time, self.begin_time
+        TOTAL_BAR_LENGTH = self.TOTAL_BAR_LENGTH
+        term_width = self.term_width
         if current == 0:
-            begin_time = time.time()  # Reset for new bar.
+            self.begin_time = time.time()  # Reset for new bar.
 
         cur_len = int(TOTAL_BAR_LENGTH*current/total)
         rest_len = int(TOTAL_BAR_LENGTH - cur_len) - 1
@@ -198,9 +184,9 @@ class ProgressBar(object):
         sys.stdout.write(']')
 
         cur_time = time.time()
-        step_time = cur_time - last_time
-        last_time = cur_time
-        tot_time = cur_time - begin_time
+        step_time = cur_time - self.last_time
+        self.last_time = cur_time
+        tot_time = cur_time - self.begin_time
 
         L = []
         L.append('  Step: %s' % format_time(step_time))
@@ -256,28 +242,6 @@ def format_time(seconds):
         f = '0ms'
     return f
 
-def parse_filename(filename):
-    """Filename contains details about learning rate, period and test time
-    score. Parse these out."""
-    lr, period, acc, loss, epoch = filename[:-3].split("_")
-    return lr, period, acc, loss, epoch
-
-def format_settings_str(*settings):
-    str_components = []
-    for s in settings:
-        if type(s) is float:
-            str_components.append("%06.3f"%s)
-        elif type(s) is int:
-            str_components.append("%05d"%s)
-        elif isinstance(s, np.float):
-            str_components.append("%06.3f"%s)
-        else:
-            raise ValueError("%s of type %s is not a valid entry"%(s, type(s)))
-    return "_".join(str_components)
-
-def format_filename(lr, decay, acc, loss, epoch):
-    fname_string = format_settings_str(lr, decay, acc, loss, epoch)
-    return fname_string+".t7"
 
 def gridfile_parse(file_object):
     for line in file_object:
@@ -315,13 +279,3 @@ def write_status(log_filename, checkpoint_loc, sgdr_or_not):
     with open(log_filename, 'w') as f:
         f.write(log_table)
 
-def clean_checkpoints(checkpoint_loc):
-    # removes all but the best performing models
-    good_models = [d['abspath'] for d in existing_checkpoints(checkpoint_loc).values()]
-    checkpoint_filenames = os.listdir(checkpoint_loc)   
-    checkpoint_abspaths = [os.path.join(checkpoint_loc, n) for n in checkpoint_filenames]
-    for cp in checkpoint_abspaths:
-        if cp not in good_models:
-            print("removing %s"%cp)
-            print(good_models)
-            os.remove(cp)
