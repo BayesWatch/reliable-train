@@ -89,6 +89,7 @@ class Checkpoint(object):
             save_path = self.save(0.0, 100.0, 0)
             self.best_saved = {'acc':0.0, 'abspath':save_path, 'epoch': 0, 'loss': 100.0}
             self.most_recent_saved = self.best_saved
+            self.epoch = 0
 
             # delete network
             del self.net
