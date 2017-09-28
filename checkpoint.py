@@ -68,11 +68,11 @@ class Checkpoint(object):
 
         # look for checkpoints with these settings
         existing = existing_checkpoints(self.checkpoint_loc)
-        self.best_saved = {'acc':0.0, 'not_found': True} # in case there are no saves
+        self.best_saved = {'loss':100.0, 'not_found': True} # in case there are no saves
         self.most_recent_saved = {'epoch':0, 'not_found': True}
         for e in existing:
             if self.setting_str == "_".join(e[0]):
-                if e[1]['acc'] > self.best_saved['acc']:
+                if e[1]['loss'] < self.best_saved['loss']:
                     self.best_saved = e[1]
                 if e[1]['epoch'] > self.most_recent_saved['epoch']:
                     self.most_recent_saved = e[1]
@@ -120,7 +120,7 @@ class Checkpoint(object):
         self.most_recent_saved['epoch'] = self.epoch
 
         # change best to point to it if it's the best
-        if acc > self.best_saved['acc']:
+        if loss < self.best_saved['loss']:
             self.best_saved = self.most_recent_saved
 
         if clean:
@@ -234,12 +234,12 @@ class Checkpoint(object):
 def existing_checkpoints(checkpoint_loc):
     # should return dictionary of settings containing file locations and validation accuracies
     checkpoint_filenames = os.listdir(checkpoint_loc)
-    existing_checkpoints = []
+    existing = []
     for n in checkpoint_filenames:
         lr, decay, minibatch_size, acc, loss, epoch = n[:-3].split("_")
-        existing_checkpoints.append(((lr, decay, minibatch_size), {'acc':float(acc), 'loss':float(loss),
+        existing.append(((lr, decay, minibatch_size), {'acc':float(acc), 'loss':float(loss),
             'abspath':os.path.join(checkpoint_loc, n), 'epoch': int(epoch)}))
-    return existing_checkpoints
+    return existing
 
 
 def set_optimizer_lr(optimizer, lr):
