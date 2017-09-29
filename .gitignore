@@ -77,3 +77,6 @@ notebooks
 # ignore any checkpoints or data
 checkpoint
 data
+
+# ignore pkls
+*.pkl
