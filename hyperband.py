@@ -89,7 +89,7 @@ class Hyperband(object):
                 for j, chunk in enumerate(chunks):
                     idxs, settings = zip(*chunk)
                     before = time.time()
-                    results = parallel_call(settings, r_i)
+                    results = parallel_call(settings, r_i) #  DEBUGGIN
                     iter_rate = (time.time() - before)/float(len(chunk)*r_i)
                     self.iterations_complete += len(chunk)*r_i
                     val_losses[np.array(idxs)] = results
@@ -139,12 +139,12 @@ class Hyperband(object):
 
                 T = [T[i] for i in np.arange(len(T))[0:int(n_i/self.eta)]]
         # 8 spaces between each
-        top_row = "max_iter %02d:   "%self.max_iter + "          ".join(["s=%01d"%s for s in reversed(self.s_list)]) + "\n"
+        top_row = "max_iter %03d:   "%int(self.max_iter) + "          ".join(["s=%01d"%s for s in reversed(self.s_list)]) + "\n"
         mtop    = "eta %01d           "%self.eta      + "    ".join(["n_i   r_i" for _ in reversed(self.s_list)]) + "\n"
         btop    = "total: %05d    "%self.total_iterations  + "    ".join(["---------" for _ in reversed(self.s_list)]) + "\n"
         indent  = "                "
         rows = []
-        for i in range(self.s_list[-1]):
+        for i in range(self.s_list[-1]+1):
             try:
                 row = []
                 for s in reversed(self.s_list):
@@ -158,8 +158,11 @@ class Hyperband(object):
         rows = "\n".join(rows)
         print(top_row+mtop+btop+rows)
 
-def run_settings(settings, n_i, gpu_index):
-    options = ["--gpu","%i"%gpu_index]
+def run_settings(settings, n_i, gpu_index, multi_gpu=False):
+    if multi_gpu:
+        options = ["--multi_gpu"]
+    else:
+        options = ["--gpu","%i"%gpu_index]
     options += ["--lr","%f"%settings[0]]
     options += ["--lr_decay","%f"%settings[1]]
     options += ["--minibatch","%i"%settings[2]]
@@ -175,9 +178,13 @@ def run_settings(settings, n_i, gpu_index):
         return 100.0
 
 def parallel_call(settings_to_run, n_iterations):
-    call = lambda settings, gpu_index: run_settings(settings, n_iterations, gpu_index)
-    with ThreadPoolExecutor(max_workers=n_gpus) as executor:
-        results = executor.map(call, settings_to_run, range(n_gpus))
+    if len(settings_to_run) == 1:
+        result = run_settings(settings_to_run[0], n_iterations, None, multi_gpu=True)
+        results = [result]
+    else:
+        call = lambda settings, gpu_index: run_settings(settings, n_iterations, gpu_index)
+        with ThreadPoolExecutor(max_workers=n_gpus) as executor:
+            results = executor.map(call, settings_to_run, range(n_gpus))
     return np.array(list(results))
     #results = []
     #for s, i in zip(settings_to_run, range(n_gpus)):
