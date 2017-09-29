@@ -9,6 +9,7 @@ import pickle
 import subprocess
 import os
 import sys
+import time
 
 from concurrent.futures import ThreadPoolExecutor
 
@@ -40,7 +41,7 @@ class Hyperband(object):
     def __init__(self, max_iter=180., eta=3.):
         try:
             self.load_state()
-        except:
+        except FileNotFoundError:
             self.eta, self.max_iter = eta, max_iter
             logeta = lambda x: math.log(x)/math.log(eta) # downsampling rate
             self.s_max = int(logeta(max_iter)) # number of unique executions of successive halving
@@ -49,6 +50,8 @@ class Hyperband(object):
 
             # depth versus width controls of successive halving inner loop
             self.s_list = list(range(self.s_max+1))
+            
+            self.iterations_complete = 0 # track how many we've done
 
     def load_state(self):
         with open("hyperband_state.pkl", "rb") as f:
@@ -56,10 +59,10 @@ class Hyperband(object):
 
     def save_state(self):
         with open("hyperband_state.pkl", "wb") as f:
-            return None
             pickle.dump(self.__dict__, f)
 
     def __iter__(self):
+        self.preamble()
         while len(self.s_list) > 0:
             s = self.s_list[-1]
             # initial number of configurations
@@ -78,7 +81,6 @@ class Hyperband(object):
                 r_i = r_i
 
                 val_losses = 100.*np.ones(len(T))
-                self.prescription_idx = 0
                 
                 self.save_state()
                 # thanks https://stackoverflow.com/questions/8991506/iterate-an-iterator-by-chunks-of-n-in-python
@@ -86,29 +88,75 @@ class Hyperband(object):
                 chunks = [idxd_T[i:i + n_gpus] for i in range(0, len(idxd_T), n_gpus)]
                 for j, chunk in enumerate(chunks):
                     idxs, settings = zip(*chunk)
+                    before = time.time()
                     results = parallel_call(settings, r_i)
+                    iter_rate = (time.time() - before)/float(len(chunk)*r_i)
+                    self.iterations_complete += len(chunk)*r_i
                     val_losses[np.array(idxs)] = results
-                    yield self.progress(r_i, s, i, (j+1)*len(chunk), len(T), np.min(val_losses), T[np.argmin(val_losses)])
+                    yield self.progress(r_i, s, i, (j+1)*len(chunk), len(T), np.min(val_losses), T[np.argmin(val_losses)], iter_rate)
 
                 T = [T[i] for i in np.argsort(val_losses)[0:int(n_i/self.eta)]]
                 _ = self.inner_loop.pop(0)
             _ = self.s_list.pop()
             del self.inner_loop
 
-    def progress(self, n_iter, outer_loc, inner_loc, settings_idx, n_settings, best_loss, best_settings):
+    def progress(self, n_iter, outer_loc, inner_loc, settings_idx, n_settings, best_loss, best_settings, iter_rate):
         """Writes a string defining the current progress of the optimisation."""
         progress_str = "Remaining configs %02d for %03d iter: "%(n_settings, n_iter)
         progress_str += "outer loop %02d/%02d, "%(self.s_max+1-outer_loc, self.s_max+1)
         progress_str += "inner loop %02d/%02d, "%(inner_loc+1, outer_loc+1)
         progress_str += "configs %02d/%02d, "%(settings_idx, n_settings) 
+        remaining = self.total_iterations - self.iterations_complete
+        progress_str += "time to complete %04.1f hours, "%((iter_rate*remaining)/(60.**2))
         progress_str += "best_loss %05.3f with "%(best_loss)
         progress_str += format_settings_str(*best_settings)
         return progress_str
 
     def preamble(self):
         """Prints full table of what will be run."""
-        assert False
-        return None
+        from collections import defaultdict
+        table = defaultdict(dict)
+        self.total_iterations = 0
+        for s in reversed(self.s_list):
+            # initial number of configurations
+            n = int(math.ceil(((self.B/self.max_iter)/(s+1))*self.eta**s))
+            # initial number of iterations to run configurations for
+            r = self.max_iter*self.eta**(-s)
+
+            T = [ get_random_config(self.rng) for i in range(n) ]
+            for i in range(s+1):
+                # run each config for r_i iterations
+                n_i = n*self.eta**(-i)
+                r_i = r*self.eta**(i)
+                r_i = r_i
+
+                table[i][s] = [n_i, r_i]
+
+                # thanks https://stackoverflow.com/questions/8991506/iterate-an-iterator-by-chunks-of-n-in-python
+                idxd_T = list(enumerate(T))
+                chunks = [idxd_T[i:i + n_gpus] for i in range(0, len(idxd_T), n_gpus)]
+                self.total_iterations += r_i*len(T)
+
+                T = [T[i] for i in np.arange(len(T))[0:int(n_i/self.eta)]]
+        # 8 spaces between each
+        top_row = "max_iter %02d:   "%self.max_iter + "          ".join(["s=%01d"%s for s in reversed(self.s_list)]) + "\n"
+        mtop    = "eta %01d           "%self.eta      + "    ".join(["n_i   r_i" for _ in reversed(self.s_list)]) + "\n"
+        btop    = "total: %05d    "%self.total_iterations  + "    ".join(["---------" for _ in reversed(self.s_list)]) + "\n"
+        indent  = "                "
+        rows = []
+        for i in range(self.s_list[-1]):
+            try:
+                row = []
+                for s in reversed(self.s_list):
+                    n_i, r_i = table[i][s]
+                    row.append("%03d   %03d"%(n_i,r_i))
+
+            except KeyError:
+                pass
+            row = indent + "    ".join(row)
+            rows.append(row)
+        rows = "\n".join(rows)
+        print(top_row+mtop+btop+rows)
 
 def run_settings(settings, n_i, gpu_index):
     options = ["--gpu","%i"%gpu_index]
