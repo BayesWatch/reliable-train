@@ -28,6 +28,7 @@ def parse():
     parser.add_argument('--minibatch', '-M', default=128, help='minibatch size')
     parser.add_argument('--epochs', '-N', default=180, help='number of epochs to train for')
     parser.add_argument('--gpu', default=0, help='index of gpu to use')
+    parser.add_argument('--multi_gpu', action='store_true', help='use all available gpus')
     parser.add_argument('-v', action='store_true', help='verbose with progress bar')
     #parser.add_argument('--sgdr', action='store_true', help='use the SGDR learning rate schedule')
     args = parser.parse_args()
@@ -38,7 +39,7 @@ def main(args):
         progress_bar = ProgressBar()
 
     use_cuda = torch.cuda.is_available()
-    gpu_index = int(args.gpu)
+    gpu_index = int(args.gpu) if not args.multi_gpu else None
     best_acc = 0  # best test accuracy
 
     n_gpus = torch.cuda.device_count()
@@ -74,7 +75,8 @@ def main(args):
         model = lambda: VGG(model_tag) # model constructor
     def get_checkpoint(initial_lr, lr_decay, minibatch_size):
         return Checkpoint(model, initial_lr, lr_decay, minibatch_size,
-                schedule, checkpoint_loc, log_loc, verbose=args.v)
+                schedule, checkpoint_loc, log_loc, verbose=args.v,
+                multi_gpu=args.multi_gpu)
     checkpoint = get_checkpoint(args.lr, args.lr_decay, args.minibatch)
 
     @exit_after(240)
@@ -90,7 +92,6 @@ def main(args):
                 progress_str = ''
                 progress_str += checkpoint.progress()
                 progress_bar(batch_idx, len(trainloader), progress_str)
-
         checkpoint.epoch += 1
     
     @exit_after(240)

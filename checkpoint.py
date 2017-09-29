@@ -44,8 +44,10 @@ class Checkpoint(object):
         log_loc: location to save logs to
     """
     def __init__(self, model, initial_lr, lr_decay, minibatch_size,
-                 lr_schedule, checkpoint_loc, log_loc, verbose=False):
+                 lr_schedule, checkpoint_loc, log_loc, verbose=False,
+                 multi_gpu=False):
         self.v = verbose
+        self.multi_gpu = multi_gpu
         # check cuda availability
         self.use_cuda = torch.cuda.is_available()
 
@@ -92,9 +94,6 @@ class Checkpoint(object):
             self.best_saved = {'acc':0.0, 'abspath':save_path, 'epoch': 0, 'loss': 100.0}
             self.most_recent_saved = self.best_saved
             self.epoch = 0
-
-            # delete network
-            del self.net
 
     def save(self, acc, loss, epoch):
         state = {
@@ -150,7 +149,13 @@ class Checkpoint(object):
         # load most recent params if we have none
         if 'net' not in self.__dict__:
             self.net, acc, loss, self.epoch = self.load_recent()
-        self.net.cuda(self.gpu_index)
+
+        if self.multi_gpu and not isinstance(self.net, torch.nn.DataParallel):
+            self.net.cuda(self.gpu_index)
+            self.net = torch.nn.DataParallel(self.net, device_ids=range(torch.cuda.device_count()))
+            cudnn.benchmark = True
+        elif not self.multi_gpu:
+            self.net.cuda(self.gpu_index)
 
         # always set up criterion and optimiser
         self.criterion = nn.CrossEntropyLoss()
