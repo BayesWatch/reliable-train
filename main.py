@@ -30,7 +30,7 @@ def parse():
     parser.add_argument('--epochs', '-N', default=180, help='number of epochs to train for')
     parser.add_argument('--gpu', default=0, help='index of gpu to use')
     parser.add_argument('--multi_gpu', action='store_true', help='use all available gpus')
-    parser.add_argument('--model', default='VGG16', type=str, help='use all available gpus')
+    parser.add_argument('--model', default='resnet50', type=str, help='use all available gpus')
     parser.add_argument('-v', action='store_true', help='verbose with progress bar')
     #parser.add_argument('--sgdr', action='store_true', help='use the SGDR learning rate schedule')
     args = parser.parse_args()
