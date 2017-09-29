@@ -23,7 +23,7 @@ from checkpoint import format_settings_str
 def get_random_config(rng):
     learning_rate = np.exp(rng.uniform(low=np.log(0.01), high=np.log(0.2)))
     lr_decay = rng.uniform(low=0., high=0.5)
-    minibatch_size = 2**rng.randint(low=4, high=10)
+    minibatch_size = 2**rng.randint(low=6, high=11)
     return learning_rate, lr_decay, minibatch_size
 
 class Hyperband(object):
