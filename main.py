@@ -44,6 +44,7 @@ def main(args):
         progress_bar = ProgressBar()
 
     use_cuda = torch.cuda.is_available()
+    gpu_index = int(args.gpu)
     best_acc = 0  # best test accuracy
 
     n_gpus = torch.cuda.device_count()
@@ -83,7 +84,7 @@ def main(args):
     checkpoint = get_checkpoint(args.lr, args.lr_decay, args.minibatch)
 
     def train(checkpoint, trainloader):
-        checkpoint.init_for_epoch(args.gpu, should_update=True, epoch_size=len(trainloader))
+        checkpoint.init_for_epoch(gpu_index, should_update=True, epoch_size=len(trainloader))
 
         batch_idx = 0
         for inputs, targets in trainloader:
@@ -98,7 +99,7 @@ def main(args):
         checkpoint.epoch += 1
 
     def validate(checkpoint, loader, save=False):
-        checkpoint.init_for_epoch(args.gpu, should_update=False)
+        checkpoint.init_for_epoch(gpu_index, should_update=False)
 
         batch_idx = 0
         for inputs, targets in loader:
@@ -115,10 +116,11 @@ def main(args):
 
         return checkpoint.best_saved['loss']
 
-    for epoch in range(args.epochs - checkpoint.epoch):
+    for epoch in range(int(args.epochs) - checkpoint.epoch):
         # train and validate this checkpoint
         train(checkpoint, trainloader)
         losses = validate(checkpoint, valloader, save=True)
+    print(checkpoint.most_recent_saved['loss'])
 
 if __name__ == '__main__':
     parse()

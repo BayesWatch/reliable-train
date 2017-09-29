@@ -60,7 +60,7 @@ class Checkpoint(object):
         self.lr_schedule = lambda batch_index, period: lr_schedule(self.lr_decay, period, batch_index)
         
         # initialise summary writer, if we can
-        self.summary_writer = get_summary_writer(log_loc, [self.initial_lr, self.lr_decay])
+        self.summary_writer = get_summary_writer(log_loc, [self.initial_lr, self.lr_decay, self.minibatch_size])
 
         # if checkpoint directory doesn't exist, make it
         if not os.path.isdir(self.checkpoint_loc):
@@ -133,8 +133,9 @@ class Checkpoint(object):
                     pdb.set_trace()
 
         if log:
-            self.summary_writer.add_scalar('/validation/loss', loss, self.minibatch_idx)
-            self.summary_writer.add_scalar('/validation/accuracy', acc, self.minibatch_idx)
+            example_idx = self.minibatch_idx*self.minibatch_size
+            self.summary_writer.add_scalar('/validation/loss', loss, example_idx)
+            self.summary_writer.add_scalar('/validation/accuracy', acc, example_idx)
 
     def load_recent(self):
         # loads most recent model
@@ -213,9 +214,10 @@ class Checkpoint(object):
 
         if should_update:
             acc = 100.*self.correct/self.total
-            self.summary_writer.add_scalar('/train/loss', loss, self.minibatch_idx)
-            self.summary_writer.add_scalar('/train/accuracy', acc, self.minibatch_idx)
-            self.summary_writer.add_scalar('/train/learning_rate', lr, self.minibatch_idx)
+            example_idx = self.minibatch_idx*self.minibatch_size
+            self.summary_writer.add_scalar('/train/loss', loss, example_idx)
+            self.summary_writer.add_scalar('/train/accuracy', acc, example_idx)
+            self.summary_writer.add_scalar('/train/learning_rate', lr, example_idx)
 
         return  loss
 

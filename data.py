@@ -19,6 +19,7 @@ class PartialDataset(torch.utils.data.Dataset):
         return self.parent_ds[i+self.offset]
 
 def cifar10(scratch_loc, minibatch_size):
+    minibatch_size = int(minibatch_size)
     # Data
     print('==> Preparing data..')
     transform_train = transforms.Compose([
@@ -36,12 +37,12 @@ def cifar10(scratch_loc, minibatch_size):
     data_save_loc = os.path.join(scratch_loc, 'data')
     print("Data saved to: %s"%data_save_loc)
     trainvalset = torchvision.datasets.CIFAR10(root=data_save_loc, train=True, download=True, transform=transform_train)
-    #trainset = PartialDataset(trainvalset, 0, 40000)
-    trainset = PartialDataset(trainvalset, 0, 256)
+    trainset = PartialDataset(trainvalset, 0, 40000)
+    #trainset = PartialDataset(trainvalset, 0, 2*minibatch_size)
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=minibatch_size, shuffle=True, num_workers=2)
 
-    #valset = PartialDataset(trainvalset, 40000, 10000)
-    valset = PartialDataset(trainvalset, 40000, 200)
+    valset = PartialDataset(trainvalset, 40000, 10000)
+    #valset = PartialDataset(trainvalset, 40000, 200)
     valloader = torch.utils.data.DataLoader(valset, batch_size=100, shuffle=False, num_workers=2)
 
     testset = torchvision.datasets.CIFAR10(root=data_save_loc, train=False, download=True, transform=transform_test)
