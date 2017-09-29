@@ -117,9 +117,12 @@ def run_settings(settings, n_i, gpu_index):
     options += ["--minibatch","%i"%settings[2]]
     options += ["--epochs","%i"%n_i]
     try:
-        out = subprocess.check_output(['python', 'dummy.py']+options, timeout=360, stderr=subprocess.STDOUT)
-        #out = subprocess.check_output(['python', 'main.py']+options, timeout=360)
-        return float(out.decode("utf-8") .split("\n")[-2])
+        command = ['python', 'main.py']+options
+        #print(" ".join(command))
+        out = subprocess.check_output(command, stderr=subprocess.STDOUT)
+        return float(out.decode("utf-8").split("\n")[-2])
+    except KeyboardInterrupt as e:
+        raise e
     except:
         return 100.0
 
@@ -127,7 +130,11 @@ def parallel_call(settings_to_run, n_iterations):
     call = lambda settings, gpu_index: run_settings(settings, n_iterations, gpu_index)
     with ThreadPoolExecutor(max_workers=n_gpus) as executor:
         results = executor.map(call, settings_to_run, range(n_gpus))
-        return np.array(list(results))
+    return np.array(list(results))
+    #results = []
+    #for s, i in zip(settings_to_run, range(n_gpus)):
+    #    results.append(call(s, i))
+    #return np.array(list(results))
 
 if __name__ == '__main__':
     h = Hyperband()

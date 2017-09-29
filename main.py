@@ -3,12 +3,6 @@ want, *it'll keep trying*).'''
 from __future__ import print_function
 
 import torch
-import torch.nn as nn
-import torch.optim as optim
-import torch.nn.functional as F
-import torch.backends.cudnn as cudnn
-
-import torchvision
 
 import sys
 import os
@@ -21,8 +15,8 @@ import numpy as np
 
 from utils import ProgressBar
 from checkpoint import Checkpoint
-from hyperband import Hyperband
 from data import cifar10
+from seppuku import exit_after
 
 from itertools import combinations
 
@@ -49,7 +43,7 @@ def main(args):
 
     n_gpus = torch.cuda.device_count()
 
-    trainloader, valloader, _ = cifar10(args.scratch, args.minibatch)
+    trainloader, valloader, _ = cifar10(args.scratch, args.minibatch, verbose=args.v)
 
     # Set where to save and load checkpoints, use model_tag for directory name
     model_tag = 'VGG16'
@@ -83,6 +77,7 @@ def main(args):
                 schedule, checkpoint_loc, log_loc, verbose=args.v)
     checkpoint = get_checkpoint(args.lr, args.lr_decay, args.minibatch)
 
+    @exit_after(240)
     def train(checkpoint, trainloader):
         checkpoint.init_for_epoch(gpu_index, should_update=True, epoch_size=len(trainloader))
 
@@ -97,7 +92,8 @@ def main(args):
                 progress_bar(batch_idx, len(trainloader), progress_str)
 
         checkpoint.epoch += 1
-
+    
+    @exit_after(240)
     def validate(checkpoint, loader, save=False):
         checkpoint.init_for_epoch(gpu_index, should_update=False)
 
