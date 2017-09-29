@@ -45,9 +45,10 @@ class Checkpoint(object):
     """
     def __init__(self, model, initial_lr, lr_decay, minibatch_size,
                  lr_schedule, checkpoint_loc, log_loc, verbose=False,
-                 multi_gpu=False):
+                 multi_gpu=False, l1_factor=0.):
         self.v = verbose
         self.multi_gpu = multi_gpu
+        self.l1_factor = l1_factor
         # check cuda availability
         self.use_cuda = torch.cuda.is_available()
 
@@ -208,6 +209,12 @@ class Checkpoint(object):
 
         if should_update:
             loss.backward()
+            if self.l1_factor > 1e-8:
+                reg_loss = 0
+                for param in self.net.parameters() if not isinstance(self.net,
+                        torch.nn.DataParallel) else self.net.module.parameters():
+                    reg_loss += self.l1_factor*l1_loss(param)
+                reg_loss.backward()
             self.optimizer.step()
             self.minibatch_idx += 1
 
@@ -291,3 +298,5 @@ except ImportError:
     def get_summary_writer(log_loc, settings):
         return DummyWriter(log_loc)
 
+def l1_loss(x):
+    return torch.abs(x).sum()

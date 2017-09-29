@@ -24,11 +24,13 @@ def parse():
     parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training\nlearning rate will decay every 60 epochs')
     parser.add_argument('--scratch', '-s', default=os.environ.get('SCRATCH',os.getcwd()), help='place to store data')
     parser.add_argument('--lr', default=0.1, help='learning rate')
+    parser.add_argument('--l1', default=0., type=float, help='l1 regularisation factor')
     parser.add_argument('--lr_decay', default=0.01, help='learning rate decay coefficient')
     parser.add_argument('--minibatch', '-M', default=128, help='minibatch size')
     parser.add_argument('--epochs', '-N', default=180, help='number of epochs to train for')
     parser.add_argument('--gpu', default=0, help='index of gpu to use')
     parser.add_argument('--multi_gpu', action='store_true', help='use all available gpus')
+    parser.add_argument('--model', default='VGG16', type=str, help='use all available gpus')
     parser.add_argument('-v', action='store_true', help='verbose with progress bar')
     #parser.add_argument('--sgdr', action='store_true', help='use the SGDR learning rate schedule')
     args = parser.parse_args()
@@ -47,7 +49,7 @@ def main(args):
     trainloader, valloader, _ = cifar10(args.scratch, args.minibatch, verbose=args.v)
 
     # Set where to save and load checkpoints, use model_tag for directory name
-    model_tag = 'VGG16'
+    model_tag = args.model
     checkpoint_loc = os.path.join(args.scratch, 'checkpoint', model_tag)
     if not os.path.isdir(checkpoint_loc):
         os.makedirs(checkpoint_loc)
@@ -73,10 +75,13 @@ def main(args):
     # model
     if 'VGG' in model_tag:
         model = lambda: VGG(model_tag) # model constructor
+    elif 'resnet' in model_tag:
+        if '50' in model_tag:
+            model = lambda: ResNet50()
     def get_checkpoint(initial_lr, lr_decay, minibatch_size):
         return Checkpoint(model, initial_lr, lr_decay, minibatch_size,
                 schedule, checkpoint_loc, log_loc, verbose=args.v,
-                multi_gpu=args.multi_gpu)
+                multi_gpu=args.multi_gpu, l1_factor=args.l1)
     checkpoint = get_checkpoint(args.lr, args.lr_decay, args.minibatch)
 
     @exit_after(240)
