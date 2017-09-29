@@ -8,6 +8,7 @@ import pickle
 
 import subprocess
 import os
+import sys
 
 from concurrent.futures import ThreadPoolExecutor
 
@@ -15,6 +16,8 @@ import numpy as np
 
 import torch
 n_gpus = torch.cuda.device_count()
+
+from checkpoint import format_settings_str
 
 def get_random_config(rng):
     learning_rate = np.exp(rng.uniform(low=np.log(0.01), high=np.log(0.2)))
@@ -53,6 +56,7 @@ class Hyperband(object):
 
     def save_state(self):
         with open("hyperband_state.pkl", "wb") as f:
+            return None
             pickle.dump(self.__dict__, f)
 
     def __iter__(self):
@@ -62,7 +66,6 @@ class Hyperband(object):
             n = int(math.ceil(((self.B/self.max_iter)/(s+1))*self.eta**s))
             # initial number of iterations to run configurations for
             r = self.max_iter*self.eta**(-s)
-            print("Running with %i configurations, max %i iterations"%(n,self.max_iter))
 
             T = [ get_random_config(self.rng) for i in range(n) ]
             if not hasattr(self, 'inner_loop'):
@@ -73,7 +76,6 @@ class Hyperband(object):
                 n_i = n*self.eta**(-i)
                 r_i = r*self.eta**(i)
                 r_i = r_i
-                print("    %i configurations left, running for %i iterations"%(len(T), r_i))
 
                 val_losses = 100.*np.ones(len(T))
                 self.prescription_idx = 0
@@ -82,16 +84,31 @@ class Hyperband(object):
                 # thanks https://stackoverflow.com/questions/8991506/iterate-an-iterator-by-chunks-of-n-in-python
                 idxd_T = list(enumerate(T))
                 chunks = [idxd_T[i:i + n_gpus] for i in range(0, len(idxd_T), n_gpus)]
-                for chunk in chunks:
+                for j, chunk in enumerate(chunks):
                     idxs, settings = zip(*chunk)
                     results = parallel_call(settings, r_i)
                     val_losses[np.array(idxs)] = results
-                    yield idxs, settings
+                    yield self.progress(r_i, s, i, (j+1)*len(chunk), len(T), np.min(val_losses), T[np.argmin(val_losses)])
 
                 T = [T[i] for i in np.argsort(val_losses)[0:int(n_i/self.eta)]]
                 _ = self.inner_loop.pop(0)
             _ = self.s_list.pop()
             del self.inner_loop
+
+    def progress(self, n_iter, outer_loc, inner_loc, settings_idx, n_settings, best_loss, best_settings):
+        """Writes a string defining the current progress of the optimisation."""
+        progress_str = "Remaining configs %02d for %03d iter: "%(n_settings, n_iter)
+        progress_str += "outer loop %02d/%02d, "%(self.s_max+1-outer_loc, self.s_max+1)
+        progress_str += "inner loop %02d/%02d, "%(inner_loc+1, outer_loc+1)
+        progress_str += "configs %02d/%02d, "%(settings_idx, n_settings) 
+        progress_str += "best_loss %05.3f with "%(best_loss)
+        progress_str += format_settings_str(*best_settings)
+        return progress_str
+
+    def preamble(self):
+        """Prints full table of what will be run."""
+        assert False
+        return None
 
 def run_settings(settings, n_i, gpu_index):
     options = ["--gpu","%i"%gpu_index]
@@ -100,11 +117,10 @@ def run_settings(settings, n_i, gpu_index):
     options += ["--minibatch","%i"%settings[2]]
     options += ["--epochs","%i"%n_i]
     try:
-        #out = subprocess.check_output(['python', 'dummy.py']+options, timeout=360)
-        out = subprocess.check_output(['python', 'main.py']+options, timeout=360)
+        out = subprocess.check_output(['python', 'dummy.py']+options, timeout=360, stderr=subprocess.STDOUT)
+        #out = subprocess.check_output(['python', 'main.py']+options, timeout=360)
         return float(out.decode("utf-8") .split("\n")[-2])
-    except Exception as e:
-        print(e)
+    except:
         return 100.0
 
 def parallel_call(settings_to_run, n_iterations):
@@ -115,6 +131,9 @@ def parallel_call(settings_to_run, n_iterations):
 
 if __name__ == '__main__':
     h = Hyperband()
-    for idxs, settings in h:
+    for progress in h:
         # update progress bar here
-        pass
+        sys.stdout.write(progress)
+        sys.stdout.write("\r")
+        sys.stdout.flush()
+    sys.stdout.write("\n")
