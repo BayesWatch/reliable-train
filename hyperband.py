@@ -38,10 +38,10 @@ class Hyperband(object):
         max_iter: maximum number of iterations per configuration.
         eta: defines downsampling rate (default=3)
     """
-    def __init__(self, max_iter=180., eta=3.):
+    def __init__(self, max_iter=180., eta=5.):
         try:
             self.load_state()
-        except FileNotFoundError:
+        except EnvironmentError:
             self.eta, self.max_iter = eta, max_iter
             logeta = lambda x: math.log(x)/math.log(eta) # downsampling rate
             self.s_max = int(logeta(max_iter)) # number of unique executions of successive halving
@@ -54,11 +54,13 @@ class Hyperband(object):
             self.iterations_complete = 0 # track how many we've done
 
     def load_state(self):
-        with open("hyperband_state.pkl", "rb") as f:
+        myhost = os.uname()[1]
+        with open(myhost+".hyperband_state.pkl", "rb") as f:
             self.__dict__.update(pickle.load(f))
 
     def save_state(self):
-        with open("hyperband_state.pkl", "wb") as f:
+        myhost = os.uname()[1]
+        with open(myhost+".hyperband_state.pkl", "wb") as f:
             pickle.dump(self.__dict__, f)
 
     def __iter__(self):
@@ -70,8 +72,8 @@ class Hyperband(object):
             # initial number of iterations to run configurations for
             r = self.max_iter*self.eta**(-s)
 
-            T = [ get_random_config(self.rng) for i in range(n) ]
             if not hasattr(self, 'inner_loop'):
+                self.T = [ get_random_config(self.rng) for i in range(n) ]
                 self.inner_loop = list(range(s+1))
             while len(self.inner_loop) > 0:
                 i = self.inner_loop[0]
@@ -80,11 +82,11 @@ class Hyperband(object):
                 r_i = r*self.eta**(i)
                 r_i = r_i
 
-                val_losses = 100.*np.ones(len(T))
+                val_losses = 100.*np.ones(len(self.T))
                 
                 self.save_state()
                 # thanks https://stackoverflow.com/questions/8991506/iterate-an-iterator-by-chunks-of-n-in-python
-                idxd_T = list(enumerate(T))
+                idxd_T = list(enumerate(self.T))
                 chunks = [idxd_T[i:i + n_gpus] for i in range(0, len(idxd_T), n_gpus)]
                 for j, chunk in enumerate(chunks):
                     idxs, settings = zip(*chunk)
@@ -93,12 +95,13 @@ class Hyperband(object):
                     iter_rate = (time.time() - before)/float(len(chunk)*r_i)
                     self.iterations_complete += len(chunk)*r_i
                     val_losses[np.array(idxs)] = results
-                    yield self.progress(r_i, s, i, (j+1)*len(chunk), len(T), np.min(val_losses), T[np.argmin(val_losses)], iter_rate)
+                    yield self.progress(r_i, s, i, (j+1)*len(chunk), len(self.T), np.min(val_losses), self.T[np.argmin(val_losses)], iter_rate)
 
-                T = [T[i] for i in np.argsort(val_losses)[0:int(n_i/self.eta)]]
+                self.T = [self.T[i] for i in np.argsort(val_losses)[0:int(n_i/self.eta)]]
                 _ = self.inner_loop.pop(0)
             _ = self.s_list.pop()
             del self.inner_loop
+            del self.T
 
     def progress(self, n_iter, outer_loc, inner_loc, settings_idx, n_settings, best_loss, best_settings, iter_rate):
         """Writes a string defining the current progress of the optimisation."""
@@ -167,6 +170,7 @@ def run_settings(settings, n_i, gpu_index, multi_gpu=False):
     options += ["--lr_decay","%f"%settings[1]]
     options += ["--minibatch","%i"%settings[2]]
     options += ["--epochs","%i"%n_i]
+    #options += ["--l1","0.0001"]
     try:
         command = ['python', 'main.py']+options
         #print(" ".join(command))
