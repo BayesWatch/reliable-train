@@ -10,6 +10,9 @@ import subprocess
 import os
 import sys
 import time
+import logging
+myhost = os.uname()[1].split(".")[0]
+logging.basicConfig(filename=myhost+".hyperband.log", level=logging.DEBUG)
 
 from concurrent.futures import ThreadPoolExecutor
 
@@ -54,12 +57,12 @@ class Hyperband(object):
             self.iterations_complete = 0 # track how many we've done
 
     def load_state(self):
-        myhost = os.uname()[1]
+        myhost = os.uname()[1].split(".")[0]
         with open(myhost+".hyperband_state.pkl", "rb") as f:
             self.__dict__.update(pickle.load(f))
 
     def save_state(self):
-        myhost = os.uname()[1]
+        myhost = os.uname()[1].split(".")[0]
         with open(myhost+".hyperband_state.pkl", "wb") as f:
             pickle.dump(self.__dict__, f)
 
@@ -173,12 +176,14 @@ def run_settings(settings, n_i, gpu_index, multi_gpu=False):
     #options += ["--l1","0.0001"]
     try:
         command = ['python', 'main.py']+options
-        #print(" ".join(command))
+        logging.info("RUNNING:  "+ " ".join(command))
         out = subprocess.check_output(command, stderr=subprocess.STDOUT)
+        logging.info("COMPLETE: "+ " ".join(command))
         return float(out.decode("utf-8").split("\n")[-2])
     except KeyboardInterrupt as e:
         raise e
-    except:
+    except Exception as e:
+        logging.info("FAILED:   "+ " ".join(command))
         return 100.0
 
 def parallel_call(settings_to_run, n_iterations):
