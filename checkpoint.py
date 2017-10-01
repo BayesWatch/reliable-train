@@ -235,8 +235,10 @@ class Checkpoint(object):
 
     def progress(self):
         acc = 100.*self.correct/self.total
-        return '| %i | %.3f | %.3f%% |'\
-            % (self.epoch, np.mean(self.accum_loss), acc)
+        net_sparsity = sparsity(self.net if not isinstance(self.net,
+            torch.nn.DataParallel) else self.net.module)
+        return '| %i | %.3f | %.3f%% | %.3f |'\
+            % (self.epoch, np.mean(self.accum_loss), acc, net_sparsity)
 
     def clear(self):
         del self.net
@@ -300,3 +302,17 @@ except ImportError:
 
 def l1_loss(x):
     return torch.abs(x).sum()
+
+def sparsity(model):
+    total = 0
+    active = 0
+    for param in model.parameters():
+        active += (torch.abs(param) > 1e-3).float().sum().data.cpu().numpy()
+        total += reduce(lambda a,b: a*b, param.size()) # no I couldn't think of a better way
+    return float((active/total))
+
+if __name__ == '__main__':
+    # test for the sparsity bit, nothing else
+    from models import *
+    net = ResNet50()
+    print(sparsity(net))
