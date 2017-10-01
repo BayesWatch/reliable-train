@@ -285,7 +285,7 @@ def format_settings_str(*settings):
 
 
 try:
-    from tensorboard import SummaryWriter
+    from tensorboardX import SummaryWriter
     def get_summary_writer(log_loc, settings):
         # save to subdir describing the hyperparam settings
         dirname = format_settings_str(*settings)
