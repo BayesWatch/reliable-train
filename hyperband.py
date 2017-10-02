@@ -7,12 +7,13 @@ import math
 import pickle
 
 import subprocess
+import argparse
 import os
 import sys
 import time
 import logging
 myhost = os.uname()[1].split(".")[0]
-logging.basicConfig(filename=myhost+".hyperband.log", level=logging.DEBUG)
+
 
 from concurrent.futures import ThreadPoolExecutor
 
@@ -24,10 +25,17 @@ n_gpus = torch.cuda.device_count()
 from checkpoint import format_settings_str
 
 def get_random_config(rng):
-    learning_rate = np.exp(rng.uniform(low=np.log(0.01), high=np.log(0.2)))
+    learning_rate = np.exp(rng.uniform(low=np.log(0.01), high=np.log(0.4)))
     lr_decay = rng.uniform(low=0., high=0.5)
     minibatch_size = 2**rng.randint(low=6, high=9)
     return learning_rate, lr_decay, minibatch_size
+
+def parse():
+    parser = argparse.ArgumentParser(description='Hyperband optimiser, runs configs using the `main.py` script.')
+    parser.add_argument('--model_multiplier', default=4, type=int, help='multiplier for number of planes in model')
+    parser.add_argument('--max_iter', default=180, type=int, help='maximum number of iterations any model can be run')
+    parser.add_argument('--eta', default=5., type=float, help='downsampling rate')
+    return parser.parse_args()
 
 class Hyperband(object):
     """
@@ -41,7 +49,7 @@ class Hyperband(object):
         max_iter: maximum number of iterations per configuration.
         eta: defines downsampling rate (default=3)
     """
-    def __init__(self, max_iter=180., eta=5.):
+    def __init__(self, model_multiplier, max_iter=180., eta=5.):
         try:
             self.load_state()
         except EnvironmentError:
@@ -55,15 +63,18 @@ class Hyperband(object):
             self.s_list = list(range(self.s_max+1))
             
             self.iterations_complete = 0 # track how many we've done
+            
+            self.model_multiplier = model_multiplier
+
+    def identity_str(self):
+        return run_identity(self.model_multiplier)+".hyperband_state.pkl"
 
     def load_state(self):
-        myhost = os.uname()[1].split(".")[0]
-        with open(myhost+".hyperband_state.pkl", "rb") as f:
+        with open(self.identity_str(), "rb") as f:
             self.__dict__.update(pickle.load(f))
 
     def save_state(self):
-        myhost = os.uname()[1].split(".")[0]
-        with open(myhost+".hyperband_state.pkl", "wb") as f:
+        with open(self.identity_str(), "wb") as f:
             pickle.dump(self.__dict__, f)
 
     def __iter__(self):
@@ -209,8 +220,14 @@ def parallel_call(settings_to_run, n_iterations):
     #    results.append(call(s, i))
     #return np.array(list(results))
 
+def run_identity(model_multiplier):
+   myhost = os.uname()[1].split(".")[0]
+   return myhost+".%02d"%model_multiplier
+
 if __name__ == '__main__':
-    h = Hyperband()
+    args = parse()
+    logging.basicConfig(filename=run_identity(args.model_multiplier)+".hyperband.log", level=logging.DEBUG)
+    h = Hyperband(max_iter=args.max_iter, eta=args.eta)
     for progress in h:
         # update progress bar here
         logging.info("PROGRESS: " + progress)
@@ -218,3 +235,4 @@ if __name__ == '__main__':
         sys.stdout.write("\r")
         sys.stdout.flush()
     sys.stdout.write("\n")
+

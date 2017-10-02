@@ -30,7 +30,8 @@ def parse():
     parser.add_argument('--epochs', '-N', default=180, help='number of epochs to train for')
     parser.add_argument('--gpu', default=0, help='index of gpu to use')
     parser.add_argument('--multi_gpu', action='store_true', help='use all available gpus')
-    parser.add_argument('--model', default='resnet50', type=str, help='use all available gpus')
+    parser.add_argument('--model', default='resnet50', type=str, help='string to choose model')
+    parser.add_argument('--model_multiplier', default=4, type=int, help='multiplier for number of planes in model')
     parser.add_argument('-v', action='store_true', help='verbose with progress bar')
     #parser.add_argument('--sgdr', action='store_true', help='use the SGDR learning rate schedule')
     args = parser.parse_args()
@@ -49,7 +50,7 @@ def main(args):
     trainloader, valloader, _ = cifar10(args.scratch, args.minibatch, verbose=args.v)
 
     # Set where to save and load checkpoints, use model_tag for directory name
-    model_tag = args.model
+    model_tag = args.model+".%02d"%args.model_multiplier
     checkpoint_loc = os.path.join(args.scratch, 'checkpoint', model_tag)
     if not os.path.isdir(checkpoint_loc):
         os.makedirs(checkpoint_loc)
@@ -77,7 +78,7 @@ def main(args):
         model = lambda: VGG(model_tag) # model constructor
     elif 'resnet' in model_tag:
         if '50' in model_tag:
-            model = lambda: ResNet50()
+            model = lambda: ResNet50(args.model_multiplier)
     def get_checkpoint(initial_lr, lr_decay, minibatch_size):
         return Checkpoint(model, initial_lr, lr_decay, minibatch_size,
                 schedule, checkpoint_loc, log_loc, verbose=args.v,
