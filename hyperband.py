@@ -162,7 +162,9 @@ class Hyperband(object):
             row = indent + "    ".join(row)
             rows.append(row)
         rows = "\n".join(rows)
-        print(top_row+mtop+btop+rows)
+        preamble_str = top_row+mtop+btop+rows
+        print(preamble_str)
+        logging.info(preamble_str)
 
 def run_settings(settings, n_i, gpu_index, multi_gpu=False):
     if multi_gpu:
