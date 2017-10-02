@@ -188,6 +188,8 @@ def run_settings(settings, n_i, gpu_index, multi_gpu=False):
     except Exception as e:
         if hasattr(e, 'output'):
             error = e.output.decode("utf-8").split('\n')[-2]
+            if 'KeyboardInterrupt' in error:
+                error += " epoch took too long to execute"
         else:
             error = str(e).strip()
         logging.info("FAILED:   "+ " ".join(command) + " ERROR: "+ error)
