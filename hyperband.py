@@ -178,8 +178,9 @@ def run_settings(settings, n_i, gpu_index, multi_gpu=False):
         command = ['python', 'main.py']+options
         logging.info("RUNNING:  "+ " ".join(command))
         out = subprocess.check_output(command, stderr=subprocess.STDOUT)
-        logging.info("COMPLETE: "+ " ".join(command))
-        return float(out.decode("utf-8").split("\n")[-2])
+        loss = float(out.decode("utf-8").split("\n")[-2])
+        logging.info("COMPLETE: "+ " ".join(command)+" %.3f"%loss)
+        return loss
     except KeyboardInterrupt as e:
         raise e
     except Exception as e:
@@ -204,6 +205,7 @@ if __name__ == '__main__':
     h = Hyperband()
     for progress in h:
         # update progress bar here
+        logging.info("PROGRESS: " + progress)
         sys.stdout.write(progress)
         sys.stdout.write("\r")
         sys.stdout.flush()
