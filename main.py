@@ -130,7 +130,7 @@ def main(args):
             validation_acc = checkpoint.best_saved['acc']
             validate(checkpoint, testloader, save=False)
             test_loss = np.mean(checkpoint.accum_loss)
-            test_acc = 100.*(checkpoint.correct/checkpoint.total)
+            test_acc = 100.*checkpoint.correct/checkpoint.total
             print("Validation loss: %.3f\n"%validation_loss+
                   "Validation accuracy: %.3f\n"%validation_acc+
                   "Test loss: %.3f\n"%test_loss+
