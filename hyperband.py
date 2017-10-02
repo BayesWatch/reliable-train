@@ -26,7 +26,7 @@ from checkpoint import format_settings_str
 def get_random_config(rng):
     learning_rate = np.exp(rng.uniform(low=np.log(0.01), high=np.log(0.2)))
     lr_decay = rng.uniform(low=0., high=0.5)
-    minibatch_size = 2**rng.randint(low=6, high=11)
+    minibatch_size = 2**rng.randint(low=6, high=9)
     return learning_rate, lr_decay, minibatch_size
 
 class Hyperband(object):
@@ -164,7 +164,7 @@ class Hyperband(object):
         rows = "\n".join(rows)
         preamble_str = top_row+mtop+btop+rows
         print(preamble_str)
-        logging.info(preamble_str)
+        logging.info("PREAMBLE:\n"+preamble_str)
 
 def run_settings(settings, n_i, gpu_index, multi_gpu=False):
     if multi_gpu:
@@ -181,12 +181,16 @@ def run_settings(settings, n_i, gpu_index, multi_gpu=False):
         logging.info("RUNNING:  "+ " ".join(command))
         out = subprocess.check_output(command, stderr=subprocess.STDOUT)
         loss = float(out.decode("utf-8").split("\n")[-2])
-        logging.info("COMPLETE: "+ " ".join(command)+" %.3f"%loss)
+        logging.info("COMPLETE: "+ " ".join(command)+" LOSS: %.3f"%loss)
         return loss
     except KeyboardInterrupt as e:
         raise e
     except Exception as e:
-        logging.info("FAILED:   "+ " ".join(command))
+        if hasattr(e, 'output'):
+            error = e.output.decode("utf-8").split('\n')[-2]
+        else:
+            error = str(e).strip()
+        logging.info("FAILED:   "+ " ".join(command) + " ERROR: "+ error)
         return 100.0
 
 def parallel_call(settings_to_run, n_iterations):
