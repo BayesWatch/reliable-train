@@ -27,7 +27,7 @@ This implementation hinges on a training script that is *persistent*, ie it
 can be stopped and started arbitrarily and it'll keep running. Given
 different settings, it'll always check to see whether those settings have
 been run before and pick up where it left off if they have. Then, all the
-`hyperband.py` script has to do is call this script, which is what it does.
+`hyperband.py` script has to do is call `main.py`, which is what it does.
 
 Training in this way is ideally suited to [Hyperband][], but there are
 other methods we could also use. The intuition behind this model is that we
