@@ -1,6 +1,6 @@
 '''
 Persistent Hyperband, will get up and keep running if run again after being
-killed. So far, will not work perfectly, however.
+killed.
 '''
 
 import math
