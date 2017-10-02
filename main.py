@@ -33,6 +33,7 @@ def parse():
     parser.add_argument('--model', default='resnet50', type=str, help='string to choose model')
     parser.add_argument('--model_multiplier', default=4, type=int, help='multiplier for number of planes in model')
     parser.add_argument('-v', action='store_true', help='verbose with progress bar')
+    parser.add_argument('--evaluate', action='store_true', help='run on test set')
     #parser.add_argument('--sgdr', action='store_true', help='use the SGDR learning rate schedule')
     args = parser.parse_args()
     main(args)
@@ -47,7 +48,7 @@ def main(args):
 
     n_gpus = torch.cuda.device_count()
 
-    trainloader, valloader, _ = cifar10(args.scratch, args.minibatch, verbose=args.v)
+    trainloader, valloader, testloader = cifar10(args.scratch, args.minibatch, verbose=args.v)
 
     # Set where to save and load checkpoints, use model_tag for directory name
     model_tag = args.model+".%02d"%args.model_multiplier
@@ -99,6 +100,7 @@ def main(args):
                 progress_str += checkpoint.progress()
                 progress_bar(batch_idx, len(trainloader), progress_str)
         checkpoint.epoch += 1
+        return None
     
     @exit_after(240)
     def validate(checkpoint, loader, save=False):
@@ -116,13 +118,24 @@ def main(args):
 
         if save:
             checkpoint.save_recent()
-
-        return checkpoint.best_saved['loss']
+        return None
 
     for epoch in range(int(args.epochs) - checkpoint.epoch):
         # train and validate this checkpoint
-        train(checkpoint, trainloader)
-        losses = validate(checkpoint, valloader, save=True)
+        if not args.evaluate:
+            train(checkpoint, trainloader)
+            validate(checkpoint, valloader, save=True)
+        else:
+            validation_loss = checkpoint.best_saved['loss']
+            validation_acc = checkpoint.best_saved['acc']
+            validate(checkpoint, testloader, save=False)
+            test_loss = np.mean(checkpoint.accum_loss)
+            test_acc = 100.*(checkpoint.correct/checkpoint.total)
+            print("Validation loss: %.3f\n"%validation_loss+
+                  "Validation accuracy: %.3f\n"%validation_acc+
+                  "Test loss: %.3f\n"%test_loss+
+                  "Test accuracy: %.3f"%test_acc)
+            return None
     print(checkpoint.most_recent_saved['loss'])
 
 if __name__ == '__main__':
