@@ -12,8 +12,6 @@ import os
 import sys
 import time
 import logging
-myhost = os.uname()[1].split(".")[0]
-
 
 from concurrent.futures import ThreadPoolExecutor
 
@@ -49,7 +47,7 @@ class Hyperband(object):
         max_iter: maximum number of iterations per configuration.
         eta: defines downsampling rate (default=3)
     """
-    def __init__(self, model_multiplier, max_iter=180., eta=5.):
+    def __init__(self, max_iter=180., eta=5.):
         try:
             self.load_state()
         except EnvironmentError:
@@ -64,17 +62,15 @@ class Hyperband(object):
             
             self.iterations_complete = 0 # track how many we've done
             
-            self.model_multiplier = model_multiplier
-
-    def identity_str(self):
-        return run_identity(self.model_multiplier)+".hyperband_state.pkl"
+    def pickle_fname(self):
+        return run_identity()+".hyperband_state.pkl"
 
     def load_state(self):
-        with open(self.identity_str(), "rb") as f:
+        with open(self.pickle_fname(), "rb") as f:
             self.__dict__.update(pickle.load(f))
 
     def save_state(self):
-        with open(self.identity_str(), "wb") as f:
+        with open(self.pickle_fname(), "wb") as f:
             pickle.dump(self.__dict__, f)
 
     def __iter__(self):
@@ -105,7 +101,7 @@ class Hyperband(object):
                 for j, chunk in enumerate(chunks):
                     idxs, settings = zip(*chunk)
                     before = time.time()
-                    results = parallel_call(settings, r_i) #  DEBUGGIN
+                    results = parallel_call(settings, r_i)
                     iter_rate = (time.time() - before)/float(len(chunk)*r_i)
                     self.iterations_complete += len(chunk)*r_i
                     val_losses[np.array(idxs)] = results
@@ -177,56 +173,64 @@ class Hyperband(object):
         print(preamble_str)
         logging.info("PREAMBLE:\n"+preamble_str)
 
-def run_settings(settings, n_i, gpu_index, multi_gpu=False):
-    if multi_gpu:
-        options = ["--multi_gpu"]
-    else:
-        options = ["--gpu","%i"%gpu_index]
-    options += ["--lr","%f"%settings[0]]
-    options += ["--lr_decay","%f"%settings[1]]
-    options += ["--minibatch","%i"%settings[2]]
-    options += ["--epochs","%i"%n_i]
-    #options += ["--l1","0.0001"]
-    try:
-        command = ['python', 'main.py']+options
-        logging.info("RUNNING:  "+ " ".join(command))
-        out = subprocess.check_output(command, stderr=subprocess.STDOUT)
-        loss = float(out.decode("utf-8").split("\n")[-2])
-        logging.info("COMPLETE: "+ " ".join(command)+" LOSS: %.3f"%loss)
-        return loss
-    except KeyboardInterrupt as e:
-        raise e
-    except Exception as e:
-        if hasattr(e, 'output'):
-            error = e.output.decode("utf-8").split('\n')[-2]
-            if 'KeyboardInterrupt' in error:
-                error += " epoch took too long to execute"
-        else:
-            error = str(e).strip()
-        logging.info("FAILED:   "+ " ".join(command) + " ERROR: "+ error)
-        return 100.0
-
 def parallel_call(settings_to_run, n_iterations):
     if len(settings_to_run) == 1:
-        result = run_settings(settings_to_run[0], n_iterations, None, multi_gpu=True)
+        result = run_settings(settings_to_run[0], n_iterations, None, timeout=n_iterations*240, multi_gpu=True)
         results = [result]
     else:
-        call = lambda settings, gpu_index: run_settings(settings, n_iterations, gpu_index)
+        call = lambda settings, gpu_index: run_settings(settings, n_iterations, gpu_index, timeout=n_iterations*240)
         with ThreadPoolExecutor(max_workers=n_gpus) as executor:
-            results = executor.map(call, settings_to_run, range(n_gpus))
+            results = executor.map(call, settings_to_run, range(n_gpus), timeout=n_iterations*500)
+            
     return np.array(list(results))
     #results = []
     #for s, i in zip(settings_to_run, range(n_gpus)):
     #    results.append(call(s, i))
     #return np.array(list(results))
 
-def run_identity(model_multiplier):
-   myhost = os.uname()[1].split(".")[0]
-   return myhost+".%02d"%model_multiplier
-
 if __name__ == '__main__':
     args = parse()
-    logging.basicConfig(filename=run_identity(args.model_multiplier)+".hyperband.log", level=logging.DEBUG)
+    def run_identity():
+       myhost = os.uname()[1].split(".")[0]
+       return myhost+".%02d"%args.model_multiplier
+
+    def run_settings(settings, n_i, gpu_index, timeout, multi_gpu=False):
+        if multi_gpu:
+            options = ["--multi_gpu"]
+        else:
+            options = ["--gpu","%i"%gpu_index]
+        options += ["--lr","%f"%settings[0]]
+        options += ["--lr_decay","%f"%settings[1]]
+        options += ["--minibatch","%i"%settings[2]]
+        options += ["--epochs","%i"%n_i]
+        options += ["--model_multiplier","%i"%args.model_multiplier]
+        #options += ["--l1","0.0001"]
+        try:
+            command = ['python', 'main.py']+options
+            logging.info("RUNNING:  "+ " ".join(command))
+            out = subprocess.check_output(command, stderr=subprocess.STDOUT, timeout=timeout)
+            loss = float(out.decode("utf-8").split("\n")[-2])
+            logging.info("COMPLETE: "+ " ".join(command)+" LOSS: %.3f"%loss)
+            return loss
+        except KeyboardInterrupt as e:
+            raise e
+        except subprocess.TimeoutExpired as e:
+            error = e.output.decode("utf-8")
+            logging.info("FAILED:   "+ " ".join(command) + " ERROR: "+ error)
+            return 100.
+        except Exception as e:
+            if hasattr(e, 'output'):
+                error = e.output.decode("utf-8").split('\n')[-2]
+                if 'KeyboardInterrupt' in error:
+                    error += " epoch took too long to execute"
+            else:
+                error = str(e).strip()
+            logging.info("FAILED:   "+ " ".join(command) + " ERROR: "+ error)
+            return 100.0
+
+    # initialise logging
+    logging.basicConfig(filename=run_identity()+".hyperband.log", level=logging.DEBUG)
+
     h = Hyperband(max_iter=args.max_iter, eta=args.eta)
     for progress in h:
         # update progress bar here
