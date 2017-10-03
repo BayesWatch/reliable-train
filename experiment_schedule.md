@@ -13,10 +13,10 @@ Hyperband search uses the following settings:
 
 Non sparse resnet with default sizing:
 
-* Resnet50 with 8 planes at input (model multiplier of 1)
-* Resnet50 with 16 planes at input (model multiplier of 2)
-* Resnet50 with 32 planes at input (model multiplier of 3)
-* Resnet50 with 64 planes at input (model multiplier of 4)
+* ~~Resnet50 with 8 planes at input (model multiplier of 1)~~
+* ~~Resnet50 with 16 planes at input (model multiplier of 2)~~
+* ~~Resnet50 with 32 planes at input (model multiplier of 3)~~
+* ~~Resnet50 with 64 planes at input (model multiplier of 4)~~
 
 Sparse with L1 coefficient of 0.00005:
 
