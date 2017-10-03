@@ -21,6 +21,7 @@ import torch
 n_gpus = torch.cuda.device_count()
 
 from checkpoint import format_settings_str
+from utils import format_l1
 
 def get_random_config(rng):
     learning_rate = np.exp(rng.uniform(low=np.log(0.01), high=np.log(0.4)))
@@ -33,6 +34,8 @@ def parse():
     parser.add_argument('--model_multiplier', default=4, type=int, help='multiplier for number of planes in model')
     parser.add_argument('--max_iter', default=180, type=int, help='maximum number of iterations any model can be run')
     parser.add_argument('--eta', default=5., type=float, help='downsampling rate')
+    parser.add_argument('--l1', default=0., type=float, help='l1 coefficient')
+    parser.add_argument('--dry', action='store_true', help='dry run')
     return parser.parse_args()
 
 class Hyperband(object):
@@ -74,7 +77,6 @@ class Hyperband(object):
             pickle.dump(self.__dict__, f)
 
     def __iter__(self):
-        self.preamble()
         while len(self.s_list) > 0:
             s = self.s_list[-1]
             # initial number of configurations
@@ -125,7 +127,7 @@ class Hyperband(object):
         progress_str += format_settings_str(*best_settings)
         return progress_str
 
-    def preamble(self):
+    def preamble(self, dry=False):
         """Prints full table of what will be run."""
         from collections import defaultdict
         table = defaultdict(dict)
@@ -170,6 +172,8 @@ class Hyperband(object):
             rows.append(row)
         rows = "\n".join(rows)
         preamble_str = top_row+mtop+btop+rows
+        if dry:
+            preamble_str += "\nIf each run takes 1 minute then will complete in %.2f hours"%((self.total_iterations/n_gpus)/(60.))
         print(preamble_str)
         logging.info("PREAMBLE:\n"+preamble_str)
 
@@ -192,7 +196,7 @@ if __name__ == '__main__':
     args = parse()
     def run_identity():
        myhost = os.uname()[1].split(".")[0]
-       return myhost+".%02d"%args.model_multiplier
+       return myhost+".%02d"%args.model_multiplier + format_l1(args.l1)
 
     def run_settings(settings, n_i, gpu_index, timeout, multi_gpu=False):
         if multi_gpu:
@@ -204,7 +208,7 @@ if __name__ == '__main__':
         options += ["--minibatch","%i"%settings[2]]
         options += ["--epochs","%i"%n_i]
         options += ["--model_multiplier","%i"%args.model_multiplier]
-        #options += ["--l1","0.0001"]
+        options += ["--l1","%.f"%args.l1]
         try:
             command = ['python', 'main.py']+options
             logging.info("RUNNING:  "+ " ".join(command))
@@ -215,7 +219,7 @@ if __name__ == '__main__':
         except KeyboardInterrupt as e:
             raise e
         except subprocess.TimeoutExpired as e:
-            error = e.output.decode("utf-8")
+            error = e.output.decode("utf-8").strip('\n')
             logging.info("FAILED:   "+ " ".join(command) + " ERROR: "+ error)
             return 100.
         except Exception as e:
@@ -232,11 +236,13 @@ if __name__ == '__main__':
     logging.basicConfig(filename=run_identity()+".hyperband.log", level=logging.DEBUG)
 
     h = Hyperband(max_iter=args.max_iter, eta=args.eta)
-    for progress in h:
-        # update progress bar here
-        logging.info("PROGRESS: " + progress)
-        sys.stdout.write(progress)
-        sys.stdout.write("\r")
-        sys.stdout.flush()
-    sys.stdout.write("\n")
+    h.preamble(dry=args.dry)
+    if not args.dry:
+        for progress in h:
+            # update progress bar here
+            logging.info("PROGRESS: " + progress)
+            sys.stdout.write(progress)
+            sys.stdout.write("\r")
+            sys.stdout.flush()
+        sys.stdout.write("\n")
 

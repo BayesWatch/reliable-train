@@ -13,7 +13,7 @@ from torch.autograd import Variable
 
 import numpy as np
 
-from utils import ProgressBar
+from utils import ProgressBar, format_l1
 from checkpoint import Checkpoint
 from data import cifar10
 from seppuku import exit_after
@@ -51,7 +51,7 @@ def main(args):
     trainloader, valloader, testloader = cifar10(args.scratch, args.minibatch, verbose=args.v)
 
     # Set where to save and load checkpoints, use model_tag for directory name
-    model_tag = args.model+".%02d"%args.model_multiplier
+    model_tag = args.model+".%02d"%args.model_multiplier+format_l1(args.l1)
     checkpoint_loc = os.path.join(args.scratch, 'checkpoint', model_tag)
     if not os.path.isdir(checkpoint_loc):
         os.makedirs(checkpoint_loc)

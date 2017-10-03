@@ -279,3 +279,5 @@ def write_status(log_filename, checkpoint_loc, sgdr_or_not):
     with open(log_filename, 'w') as f:
         f.write(log_table)
 
+def format_l1(l1):
+    return (".l1_%.01E"%l1).lower().replace("0", "")
