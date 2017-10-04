@@ -208,7 +208,7 @@ if __name__ == '__main__':
         options += ["--minibatch","%i"%settings[2]]
         options += ["--epochs","%i"%n_i]
         options += ["--model_multiplier","%i"%args.model_multiplier]
-        options += ["--l1","%.f"%args.l1]
+        options += ["--l1","%f"%args.l1]
         try:
             command = ['python', 'main.py']+options
             logging.info("RUNNING:  "+ " ".join(command))
