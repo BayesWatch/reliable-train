@@ -58,10 +58,8 @@ def flops_layer(layer, w, h):
 
         # image size
         flops = C1 * C2 * K1 * K2 * h * w
-        print(C1,C2,K1,K2,h,w)
         h = math.floor((h+2*padding[0]-dilation[0]*(K1-1)-1)/stride[0]+1)
         w = math.floor((w+2*padding[1]-dilation[1]*(K2-1)-1)/stride[1]+1)
-        #print(flops)
 
 
     elif layer.find('MaxPool2d') >= 0:
