@@ -19,3 +19,12 @@ Sparse results would be today, but there was a bug in the `hyperband.py`
 parsing of the l1 argument, so they were all run with an l1 of zero.
 Luckily, that means that `main.py` just went over all the non-sparse
 experiments again, filling in any that it had missed.
+
+5th October 2017
+----------------
+
+Sparse results are _still_ pending. Was running a VGG16 experiment on
+another machine and AFS synced the changes when I started the experiment
+running sparsity, so ended up running VGG16 when I meant to run an
+experiment with resnet50. Will have to be tomorrow.
+
