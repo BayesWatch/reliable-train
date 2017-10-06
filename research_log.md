@@ -28,3 +28,12 @@ another machine and AFS synced the changes when I started the experiment
 running sparsity, so ended up running VGG16 when I meant to run an
 experiment with resnet50. Will have to be tomorrow.
 
+6th October 2017
+----------------
+
+Sparse results published to the same notebook as before
+[here](https://gist.github.com/gngdb/4d70b62addd4a96885e981e837645353). On
+the validation got the nice result that the sparse network exceeds the
+performance of the full network for a given number of active parameters,
+but on the test set this didn't hold. Could be that L1 causes overfitting,
+or could just be noise, as the accuracy difference is only around 1%.
