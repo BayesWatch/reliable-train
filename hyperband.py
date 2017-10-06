@@ -32,6 +32,7 @@ def get_random_config(rng):
 def parse():
     parser = argparse.ArgumentParser(description='Hyperband optimiser, runs configs using the `main.py` script.')
     parser.add_argument('--model_multiplier', default=4, type=int, help='multiplier for number of planes in model')
+    parser.add_argument('--model', default='resnet50', type=str, help='string referring to model to use')
     parser.add_argument('--max_iter', default=180, type=int, help='maximum number of iterations any model can be run')
     parser.add_argument('--eta', default=5., type=float, help='downsampling rate')
     parser.add_argument('--l1', default=0., type=float, help='l1 coefficient')
@@ -209,6 +210,7 @@ if __name__ == '__main__':
         options += ["--epochs","%i"%n_i]
         options += ["--model_multiplier","%i"%args.model_multiplier]
         options += ["--l1","%f"%args.l1]
+        options += ["--model",args.model]
         try:
             command = ['python', 'main.py']+options
             logging.info("RUNNING:  "+ " ".join(command))
