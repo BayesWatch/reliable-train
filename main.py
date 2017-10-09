@@ -7,6 +7,8 @@ import torch
 import sys
 import os
 import argparse
+import traceback
+import logging
 
 from models import *
 from torch.autograd import Variable
@@ -143,9 +145,25 @@ def main(args):
                   "Test loss: %.3f\n"%test_loss+
                   "Test accuracy: %.3f"%test_acc)
             return None
+        assert False
     print(checkpoint.most_recent_saved['loss'])
 
 if __name__ == '__main__':
     args = parse()
-    main(args)
-
+    # initialise logging
+    model_tag = format_model_tag(args.model, args.model_multiplier, args.l1)
+    logging_loc = os.path.join(args.scratch, 'checkpoint', model_tag, 'errors.log')
+    logging.basicConfig(filename=logging_loc, level=logging.DEBUG)
+    # useful for logging
+    cmdline = "python " + " ".join(sys.argv)
+    try:
+        main(args)
+    except Exception as e:
+        # log the error then raise the exception again
+        logging.info("COMMAND FAILED: %s"%cmdline)
+        logging.error(traceback.format_exc())
+        raise
+    except KeyboardInterrupt:
+        logging.info("COMMAND DIED HONOURABLY: %s"%cmdline)
+    except:
+        logging.info("COMMAND DIED MYSTERIOUSLY: %s"%cmdline)
