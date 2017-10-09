@@ -36,7 +36,7 @@ def parse():
     parser.add_argument('--evaluate', action='store_true', help='run on test set')
     #parser.add_argument('--sgdr', action='store_true', help='use the SGDR learning rate schedule')
     args = parser.parse_args()
-    main(args)
+    return args
 
 def main(args):
     if args.v:
@@ -142,4 +142,6 @@ def main(args):
     print(checkpoint.most_recent_saved['loss'])
 
 if __name__ == '__main__':
-    parse()
+    args = parse()
+    main(args)
+
