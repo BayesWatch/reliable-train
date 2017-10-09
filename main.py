@@ -38,6 +38,13 @@ def parse():
     args = parser.parse_args()
     return args
 
+def format_model_tag(model, model_multiplier, l1):
+    if 'resnet' in model:
+        model_tag = model+".%02d"%model_multiplier+format_l1(l1)
+    else:
+        model_tag = model
+    return model_tag
+
 def main(args):
     if args.v:
         progress_bar = ProgressBar()
@@ -51,10 +58,7 @@ def main(args):
     trainloader, valloader, testloader = cifar10(args.scratch, args.minibatch, verbose=args.v)
 
     # Set where to save and load checkpoints, use model_tag for directory name
-    if 'resnet' in args.model:
-        model_tag = args.model+".%02d"%args.model_multiplier+format_l1(args.l1)
-    else:
-        model_tag = args.model
+    model_tag = format_model_tag(args.model, args.model_multiplier, args.l1)
     checkpoint_loc = os.path.join(args.scratch, 'checkpoint', model_tag)
     if not os.path.isdir(checkpoint_loc):
         os.makedirs(checkpoint_loc)
