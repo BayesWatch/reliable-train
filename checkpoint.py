@@ -136,8 +136,8 @@ class Checkpoint(object):
 
         if log:
             example_idx = self.minibatch_idx*self.minibatch_size
-            self.summary_writer.add_scalar('/validation/loss', loss, example_idx)
-            self.summary_writer.add_scalar('/validation/accuracy', acc, example_idx)
+            self.summary_writer.add_scalar('validation/loss', loss, example_idx)
+            self.summary_writer.add_scalar('validation/accuracy', acc, example_idx)
 
     def load_recent(self):
         # loads most recent model
@@ -229,9 +229,9 @@ class Checkpoint(object):
         if should_update:
             acc = 100.*self.correct/self.total
             example_idx = self.minibatch_idx*self.minibatch_size
-            self.summary_writer.add_scalar('/train/loss', loss, example_idx)
-            self.summary_writer.add_scalar('/train/accuracy', acc, example_idx)
-            self.summary_writer.add_scalar('/train/learning_rate', lr, example_idx)
+            self.summary_writer.add_scalar('train/loss', loss, example_idx)
+            self.summary_writer.add_scalar('train/accuracy', acc, example_idx)
+            self.summary_writer.add_scalar('train/learning_rate', lr, example_idx)
 
         return  loss
 
@@ -252,6 +252,7 @@ class Checkpoint(object):
 def existing_checkpoints(checkpoint_loc):
     # should return dictionary of settings containing file locations and validation accuracies
     checkpoint_filenames = os.listdir(checkpoint_loc)
+    checkpoint_filenames = [cf for cf in checkpoint_filenames if '.t7' in cf]
     existing = []
     for n in checkpoint_filenames:
         lr, decay, minibatch_size, acc, loss, epoch = n[:-3].split("_")
