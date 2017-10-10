@@ -109,7 +109,7 @@ class Hyperband(object):
                     iter_rate = (time.time() - before)/float(len(chunk)*r_i)
                     self.iterations_complete += len(chunk)*(r_i-self.completed)
                     val_losses[np.array(idxs)] = results
-                    yield self.progress(r_i, s, i, (j+1)*len(chunk), len(self.T), np.min(val_losses), self.T[np.argmin(val_losses)], iter_rate)
+                    yield self.progress(s, i, (j+1)*len(chunk), len(self.T), np.min(val_losses), self.T[np.argmin(val_losses)], iter_rate)
                 # keep track of how many epochs the saved checkpoints have completed already
                 self.completed = r_i
 
@@ -119,9 +119,9 @@ class Hyperband(object):
             del self.inner_loop
             del self.T
 
-    def progress(self, n_iter, outer_loc, inner_loc, settings_idx, n_settings, best_loss, best_settings, iter_rate):
+    def progress(self, outer_loc, inner_loc, settings_idx, n_settings, best_loss, best_settings, iter_rate):
         """Writes a string defining the current progress of the optimisation."""
-        progress_str = "Remaining configs %02d for %03d iter: "%(n_settings, n_iter)
+        progress_str = "Completed: "
         progress_str += "outer loop %02d/%02d, "%(self.s_max+1-outer_loc, self.s_max+1)
         progress_str += "inner loop %02d/%02d, "%(inner_loc+1, outer_loc+1)
         progress_str += "configs %02d/%02d, "%(settings_idx, n_settings) 
