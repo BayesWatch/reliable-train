@@ -88,6 +88,7 @@ class Hyperband(object):
             if not hasattr(self, 'inner_loop'):
                 self.T = [ get_random_config(self.rng) for i in range(n) ]
                 self.inner_loop = list(range(s+1))
+                self.completed = 0
             while len(self.inner_loop) > 0:
                 i = self.inner_loop[0]
                 # run each config for r_i iterations
@@ -106,9 +107,11 @@ class Hyperband(object):
                     before = time.time()
                     results = parallel_call(settings, r_i)
                     iter_rate = (time.time() - before)/float(len(chunk)*r_i)
-                    self.iterations_complete += len(chunk)*r_i
+                    self.iterations_complete += len(chunk)*(r_i-self.completed)
                     val_losses[np.array(idxs)] = results
                     yield self.progress(r_i, s, i, (j+1)*len(chunk), len(self.T), np.min(val_losses), self.T[np.argmin(val_losses)], iter_rate)
+                # keep track of how many epochs the saved checkpoints have completed already
+                self.completed = r_i
 
                 self.T = [self.T[i] for i in np.argsort(val_losses)[0:int(n_i/self.eta)]]
                 _ = self.inner_loop.pop(0)
@@ -130,6 +133,8 @@ class Hyperband(object):
 
     def preamble(self, dry=False):
         """Prints full table of what will be run."""
+        # yes, the easiest way to run the above algorithm without actually
+        # running it was to just copy it
         from collections import defaultdict
         table = defaultdict(dict)
         self.total_iterations = 0
@@ -138,6 +143,7 @@ class Hyperband(object):
             n = int(math.ceil(((self.B/self.max_iter)/(s+1))*self.eta**s))
             # initial number of iterations to run configurations for
             r = self.max_iter*self.eta**(-s)
+            completed = 0
 
             T = [ get_random_config(self.rng) for i in range(n) ]
             for i in range(s+1):
@@ -151,7 +157,8 @@ class Hyperband(object):
                 # thanks https://stackoverflow.com/questions/8991506/iterate-an-iterator-by-chunks-of-n-in-python
                 idxd_T = list(enumerate(T))
                 chunks = [idxd_T[i:i + n_gpus] for i in range(0, len(idxd_T), n_gpus)]
-                self.total_iterations += r_i*len(T)
+                self.total_iterations += (r_i-completed)*len(T)
+                completed = r_i
 
                 T = [T[i] for i in np.arange(len(T))[0:int(n_i/self.eta)]]
         # 8 spaces between each
