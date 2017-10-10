@@ -145,7 +145,6 @@ def main(args):
                   "Test loss: %.3f\n"%test_loss+
                   "Test accuracy: %.3f"%test_acc)
             return None
-        assert False
     print(checkpoint.most_recent_saved['loss'])
 
 if __name__ == '__main__':
