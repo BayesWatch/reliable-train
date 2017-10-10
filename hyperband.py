@@ -105,7 +105,7 @@ class Hyperband(object):
                 for j, chunk in enumerate(chunks):
                     idxs, settings = zip(*chunk)
                     before = time.time()
-                    results = parallel_call(settings, r_i)
+                    results = parallel_call(settings, r_i, self.completed)
                     iter_rate = (time.time() - before)/float(len(chunk)*r_i)
                     self.iterations_complete += len(chunk)*(r_i-self.completed)
                     val_losses[np.array(idxs)] = results
@@ -185,9 +185,10 @@ class Hyperband(object):
         print(preamble_str)
         logging.info("PREAMBLE:\n"+preamble_str)
 
-def parallel_call(settings_to_run, n_iterations):
+def parallel_call(settings_to_run, n_iterations, completed):
     if len(settings_to_run) == 1:
-        result = run_settings(settings_to_run[0], n_iterations, None, timeout=n_iterations*240, multi_gpu=True)
+        result = run_settings(settings_to_run[0], n_iterations, None,
+                timeout=(n_iterations-completed)*240, multi_gpu=True)
         results = [result]
     else:
         call = lambda settings, gpu_index: run_settings(settings, n_iterations, gpu_index, timeout=n_iterations*240)
