@@ -89,6 +89,8 @@ def main(args):
     elif 'resnet' in model_tag:
         if '50' in model_tag:
             model = lambda: ResNet50(args.model_multiplier)
+    elif 'butterfly' in model_tag:
+        model = lambda: ButterflyNet()
     def get_checkpoint(initial_lr, lr_decay, minibatch_size):
         return Checkpoint(model, initial_lr, lr_decay, minibatch_size,
                 schedule, checkpoint_loc, log_loc, verbose=args.v,
@@ -152,6 +154,8 @@ if __name__ == '__main__':
     # initialise logging
     model_tag = format_model_tag(args.model, args.model_multiplier, args.l1)
     logging_loc = os.path.join(args.scratch, 'checkpoint', model_tag, 'errors.log')
+    if not os.path.isdir(os.path.dirname(logging_loc)):
+        os.makedirs(os.path.dirname(logging_loc))
     logging.basicConfig(filename=logging_loc, level=logging.DEBUG)
     # useful for logging
     cmdline = "python " + " ".join(sys.argv)
