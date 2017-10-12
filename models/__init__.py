@@ -7,4 +7,5 @@ from .resnet import *
 #from .densenet import *
 #from .googlenet import *
 #from .mobilenet import *
+from .butterfly import *
 #from .shufflenet import *
