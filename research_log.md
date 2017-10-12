@@ -37,3 +37,38 @@ the validation got the nice result that the sparse network exceeds the
 performance of the full network for a given number of active parameters,
 but on the test set this didn't hold. Could be that L1 causes overfitting,
 or could just be noise, as the accuracy difference is only around 1%.
+
+12th October 2017
+-----------------
+
+Planning experiments involving other algorithms for sparsification.
+Sticking with the same resnet50 architecture, we would like to see if the
+[Deep Compression][dc] pruning algorithm can be applied to sparsify it
+better than using L1 regularisation.
+
+Unfortunately, they have never published much in the way of useable code,
+so we have to guess based on the [both][dc] [papers][lw]. It looks like, in the simplest
+reading the algorithm is the following:
+
+1. Train with L2 regularisation (and dropout if you expect to have problems
+with overfitting).
+2. After this network has converged quite well, remove all parameters with
+an absolute value below a threshold (unfortunately, we don't know what to
+set this threshold to).
+3. Retrain with a smaller learning rate.
+
+Going to follow the lead of [this paper][d2017] when replicating deep
+compression and prune until a set number of parameters remain. Will
+experiment to see what a reasonable proportion of parameters to throw away
+is. Will do the pruning when we've been reducing the learning rate, to
+maintain consistency with the optimisation routine. Will have to develop
+code to fix parameters to zero.
+
+The other paper which we are going to replicate is [Sparsifying Variational
+Dropout][spvar], because it get's very competitive sparsification results
+and I've already replicated it twice.
+
+[dc]: https://arxiv.org/abs/1510.00149v5
+[lw]: https://arxiv.org/abs/1506.02626
+[spvar]: https://arxiv.org/abs/1701.05369
+[d2017]: https://arxiv.org/abs/1705.07565
