@@ -205,7 +205,7 @@ if __name__ == '__main__':
     args = parse()
     def run_identity():
        myhost = os.uname()[1].split(".")[0]
-       return myhost+".%02d"%args.model_multiplier + format_l1(args.l1)
+       return myhost+".%02d"%args.model_multiplier + format_l1(args.l1)+".%s"%args.model
 
     def run_settings(settings, n_i, gpu_index, timeout, multi_gpu=False):
         if multi_gpu:
