@@ -20,8 +20,31 @@ Non sparse resnet with default sizing:
 
 Sparse with L1 coefficient of 0.00005:
 
+* ~~Resnet50 with 8 planes at input (model multiplier of 1)~~
+* ~~Resnet50 with 16 planes at input (model multiplier of 2)~~
+* ~~Resnet50 with 32 planes at input (model multiplier of 3)~~
+* ~~Resnet50 with 64 planes at input (model multiplier of 4)~~
+
+## Replicated Methods
+
+Working with [Deep Compression][dc] and [Sparsifying Variational
+Dropout][spvar].
+
+Sparsifying variational dropout with default parameters:
+
 * Resnet50 with 8 planes at input (model multiplier of 1)
 * Resnet50 with 16 planes at input (model multiplier of 2)
 * Resnet50 with 32 planes at input (model multiplier of 3)
 * Resnet50 with 64 planes at input (model multiplier of 4)
 
+Deep compression with ad hoc settings (good default settings unknown, not
+published):
+
+* Resnet50 with 8 planes at input (model multiplier of 1)
+* Resnet50 with 16 planes at input (model multiplier of 2)
+* Resnet50 with 32 planes at input (model multiplier of 3)
+* Resnet50 with 64 planes at input (model multiplier of 4)
+
+[dc]: https://arxiv.org/abs/1510.00149v5
+[lw]: https://arxiv.org/abs/1506.02626
+[spvar]: https://arxiv.org/abs/1701.05369
