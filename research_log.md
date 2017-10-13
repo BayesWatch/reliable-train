@@ -72,3 +72,18 @@ and I've already replicated it twice.
 [lw]: https://arxiv.org/abs/1506.02626
 [spvar]: https://arxiv.org/abs/1701.05369
 [d2017]: https://arxiv.org/abs/1705.07565
+
+13th October 2017
+-----------------
+
+Intended to start the experiments with variational dropout today, but
+couldn't replicate the variational dropout results in pytorch on MNIST.
+Unsure exactly why at this point, but the optimisation is just falling into
+the local optimum of zeroing all the weights every time.
+
+I don't really know why this doesn't happen in the Tensorflow version of
+the code, but the fact is that it doesn't. Comparing the code for each
+version against each other to try and find a problem. If that doesn't work,
+only idea I have left is numerical gradient checking on pytorch to check
+that something isn't getting dropped and ruining the optimisation.
+
