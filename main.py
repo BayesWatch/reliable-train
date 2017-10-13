@@ -90,14 +90,19 @@ def main(args):
         if '50' in model_tag:
             model = lambda: ResNet50(args.model_multiplier)
     elif 'butterfly' in model_tag:
-        model = lambda: ButterflyNet()
+        if 'res' in model_tag:
+            model = lambda: ButterflyResNet18()
+        else:
+            model = lambda: ButterflyNet()
+    elif 'mobilenet' in model_tag:
+        model = lambda: MobileNet()
     def get_checkpoint(initial_lr, lr_decay, minibatch_size):
         return Checkpoint(model, initial_lr, lr_decay, minibatch_size,
                 schedule, checkpoint_loc, log_loc, verbose=args.v,
                 multi_gpu=args.multi_gpu, l1_factor=args.l1)
     checkpoint = get_checkpoint(args.lr, args.lr_decay, args.minibatch)
 
-    @exit_after(240)
+    #@exit_after(240)
     def train(checkpoint, trainloader):
         checkpoint.init_for_epoch(gpu_index, should_update=True, epoch_size=len(trainloader))
 
@@ -113,7 +118,7 @@ def main(args):
         checkpoint.epoch += 1
         return None
     
-    @exit_after(240)
+    #@exit_after(240)
     def validate(checkpoint, loader, save=False):
         checkpoint.init_for_epoch(gpu_index, should_update=False)
 

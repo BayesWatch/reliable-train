@@ -9,6 +9,8 @@ import torch.nn.functional as F
 
 from torch.autograd import Variable
 
+from pyinn.modules import Conv2dDepthwise
+
 def is_power(x, power=2, eps=1e-8):
     x = int(x)
     while x > 1:
@@ -21,12 +23,13 @@ def log_2(x):
     return int(log(x)/log(2.))
 
 class Block(nn.Module):
+    expansion = 1
     '''Depthwise conv + Pointwise conv'''
     def __init__(self, in_planes, out_planes, stride=1):
         # must have power of twos in the numbers of filters
         assert is_power(in_planes) and is_power(out_planes)
         super(Block, self).__init__()
-        self.conv1 = nn.Conv2d(in_planes, in_planes, kernel_size=3, stride=stride, padding=1, groups=in_planes, bias=False)
+        self.conv1 = Conv2dDepthwise(in_planes, kernel_size=3, stride=stride, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(in_planes)
 
         n_steps = log_2(in_planes)
@@ -44,7 +47,7 @@ class Block(nn.Module):
                 m = 1
             else:
                 m = 2
-            m2d = nn.Conv2d(n_groups, m*n_groups, (2,1), stride=(2,1), padding=(0,0), groups=n_groups)
+            m2d = nn.Conv2d(n_groups, m*n_groups, (2,1), stride=(2,1), padding=(0,0), groups=n_groups, bias=False)
             butterfly_steps.append(m2d)
             bn = nn.BatchNorm2d(m*n_groups)
             butterfly_steps.append(bn)
@@ -91,8 +94,50 @@ class ButterflyNet(nn.Module):
         return out
 
 
+def conv3x3(in_planes, out_planes, stride=1):
+    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=1, bias=False)
+
+
+class ButterflyResNet(nn.Module):
+    def __init__(self, block, num_blocks, num_classes=10, plane_multiplier=4):
+        super(ButterflyResNet, self).__init__()
+        self.in_planes = 4*2**plane_multiplier
+        planes = 4*2**plane_multiplier
+
+        self.conv1 = conv3x3(3,planes)
+        self.bn1 = nn.BatchNorm2d(planes)
+        self.layer1 = self._make_layer(block, planes, num_blocks[0], stride=1)
+        self.layer2 = self._make_layer(block, planes*2, num_blocks[1], stride=2)
+        self.layer3 = self._make_layer(block, planes*4, num_blocks[2], stride=2)
+        self.layer4 = self._make_layer(block, planes*8, num_blocks[3], stride=2)
+        self.linear = nn.Linear(planes*8*block.expansion, num_classes)
+
+    def _make_layer(self, block, planes, num_blocks, stride):
+        strides = [stride] + [1]*(num_blocks-1)
+        layers = []
+        for stride in strides:
+            layers.append(block(self.in_planes, planes, stride))
+            self.in_planes = planes * block.expansion
+        return nn.Sequential(*layers)
+
+    def forward(self, x):
+        out = F.relu(self.bn1(self.conv1(x)))
+        out = self.layer1(out)
+        out = self.layer2(out)
+        out = self.layer3(out)
+        out = self.layer4(out)
+        out = F.avg_pool2d(out, 4)
+        out = out.view(out.size(0), -1)
+        out = self.linear(out)
+        return out
+
+
+def ButterflyResNet18():
+    return ButterflyResNet(Block, [2,2,2,2])
+
+
 def test():
-    net = ButterflyNet()
+    net = ButterflyResNet18()
     x = torch.randn(1,3,32,32)
     y = net(Variable(x))
     print(y.size())
