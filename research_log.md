@@ -87,3 +87,18 @@ version against each other to try and find a problem. If that doesn't work,
 only idea I have left is numerical gradient checking on pytorch to check
 that something isn't getting dropped and ruining the optimisation.
 
+16th October 2017
+-----------------
+
+Ran experiment with experimental butterfly architecture over the weekend,
+training a simple resnet18. Unfortunately, could only get it to converge to
+74%. Training was unstable:
+
+![](images/butterfly_res.png)
+
+![](images/butterfly_resloss.png)
+
+Unsure why it should be so unstable, but would hope that if it could be
+trained it should be able to represent any function that can be represented
+by a single fully connected 1x1 convolution.
+
