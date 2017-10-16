@@ -23,12 +23,6 @@ class Checkpoint(object):
     these settings. When called to train on an epoch, loads these settings and
     moves the model definition into a specified gpu.
 
-    Trains for one epoch by being passed minibatches in a for loop, but can be
-    trained at the same time as other models using parallel threads, such as
-    the following in Python 3.5:
-
-    PENDING
-
     After training and validation, call the save method to save the new point.
     Stores only two checkpoints at most, the most recent and the best
     performing on the validation set.
