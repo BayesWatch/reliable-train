@@ -41,7 +41,8 @@ class Checkpoint(object):
     """
     def __init__(self, model, initial_lr, lr_decay, minibatch_size,
                  lr_schedule, checkpoint_loc, log_loc, verbose=False,
-                 multi_gpu=False, l1_factor=0.):
+                 multi_gpu=False, l1_factor=0., Optimizer=optim.SGD):
+        self.Optimizer = Optimizer
         self.v = verbose
         self.multi_gpu = multi_gpu
         self.l1_factor = l1_factor
@@ -156,7 +157,7 @@ class Checkpoint(object):
 
         # always set up criterion and optimiser
         self.criterion = nn.CrossEntropyLoss()
-        self.optimizer = optim.SGD(self.net.parameters(), lr=0.1, momentum=0.9, weight_decay=5e-4)
+        self.optimizer = self.Optimizer(self.net.parameters(), lr=0.1, momentum=0.9, weight_decay=5e-4)
         self.correct, self.total, self.accum_loss = 0, 0, []
 
         if should_update:
@@ -171,6 +172,8 @@ class Checkpoint(object):
             self.epoch_size = epoch_size
 
             self.minibatch_idx = current_batch
+
+            self.sparsify = lambda x: self.optimizer.maybe_sparsify(x, 60*epoch_size)
         else:
             self.net.eval()
 
@@ -226,6 +229,9 @@ class Checkpoint(object):
             self.summary_writer.add_scalar('train/loss', loss, example_idx)
             self.summary_writer.add_scalar('train/accuracy', acc, example_idx)
             self.summary_writer.add_scalar('train/learning_rate', lr, example_idx)
+            # if we've reached a high enough batch then sparsify
+            if hasattr(self.optimizer, 'sparsify'):
+                self.optimizer.maybe_sparsify(batch_index)
 
         return  loss
 
