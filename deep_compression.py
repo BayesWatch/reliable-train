@@ -1,4 +1,4 @@
-from pytorch.optimizer import SGD, required
+from torch.optim import SGD
 
 
 class MaskedSGD(SGD):

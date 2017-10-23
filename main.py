@@ -36,6 +36,7 @@ def parse():
     parser.add_argument('--model_multiplier', default=4, type=int, help='multiplier for number of planes in model')
     parser.add_argument('-v', action='store_true', help='verbose with progress bar')
     parser.add_argument('--evaluate', action='store_true', help='run on test set')
+    parser.add_argument('--deep_compression', action='store_true', help='use deep compression to sparsify')
     #parser.add_argument('--sgdr', action='store_true', help='use the SGDR learning rate schedule')
     args = parser.parse_args()
     return args
@@ -96,11 +97,17 @@ def main(args):
             model = lambda: ButterflyNet()
     elif 'mobilenet' in model_tag:
         model = lambda: MobileNet()
-    def get_checkpoint(initial_lr, lr_decay, minibatch_size):
-        return Checkpoint(model, initial_lr, lr_decay, minibatch_size,
-                schedule, checkpoint_loc, log_loc, verbose=args.v,
-                multi_gpu=args.multi_gpu, l1_factor=args.l1)
-    checkpoint = get_checkpoint(args.lr, args.lr_decay, args.minibatch)
+
+    # choose model from args
+    if args.deep_compression:
+        from deep_compression import MaskedSGD
+        Optimizer = MaskedSGD
+    else:
+        Optimizer = optim.SGD
+
+    checkpoint = Checkpoint(model, args.lr, args.lr_decay, args.minibatch,
+            schedule, checkpoint_loc, log_loc, verbose=args.v,
+            multi_gpu=args.multi_gpu, l1_factor=args.l1, Optimizer=Optimizer)
 
     #@exit_after(240)
     def train(checkpoint, trainloader):
@@ -158,6 +165,8 @@ if __name__ == '__main__':
     args = parse()
     # initialise logging
     model_tag = format_model_tag(args.model, args.model_multiplier, args.l1)
+    if args.deep_compression:
+        model_tag += '.dc'
     logging_loc = os.path.join(args.scratch, 'checkpoint', model_tag, 'errors.log')
     if not os.path.isdir(os.path.dirname(logging_loc)):
         os.makedirs(os.path.dirname(logging_loc))

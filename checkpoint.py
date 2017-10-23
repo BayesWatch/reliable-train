@@ -231,7 +231,7 @@ class Checkpoint(object):
             self.summary_writer.add_scalar('train/learning_rate', lr, example_idx)
             # if we've reached a high enough batch then sparsify
             if hasattr(self.optimizer, 'sparsify'):
-                self.optimizer.maybe_sparsify(batch_index)
+                self.sparsify(batch_index)
 
         return  loss
 
