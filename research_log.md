@@ -102,3 +102,11 @@ Unsure why it should be so unstable, but would hope that if it could be
 trained it should be able to represent any function that can be represented
 by a single fully connected 1x1 convolution.
 
+Also, realised that a good implementation of variational dropout in pytorch
+is extremely difficult, because it requires running *two* convolutions in
+parallel for every convolution you would do in a vanilla network. So, it
+may not even be worth porting it from tensorflow. It may be easier to just
+write a new training script in tensorflow.
+
+
+
