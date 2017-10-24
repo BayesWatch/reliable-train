@@ -108,5 +108,13 @@ parallel for every convolution you would do in a vanilla network. So, it
 may not even be worth porting it from tensorflow. It may be easier to just
 write a new training script in tensorflow.
 
+24th October 2017
+-----------------
 
+Deep compression experiments with resnet50 seem to suggest that it's *very*
+difficult to retrain after sparsification. 10 epochs in, there is almost no
+progress back to the accuracy the network was getting before
+sparsification. The paper suggests that it may be better to sparsify more
+slowly, training in between, but I haven't tried that yet. Running for
+longer to make sure.
 
