@@ -173,7 +173,7 @@ class Checkpoint(object):
 
             self.minibatch_idx = current_batch
 
-            self.sparsify = lambda x: self.optimizer.maybe_sparsify(x, 60*epoch_size)
+            self.sparsify = lambda x: self.optimizer.maybe_sparsify(x+current_batch, 60*epoch_size)
         else:
             self.net.eval()
 
@@ -190,7 +190,6 @@ class Checkpoint(object):
         # backward pass and update if should_update is true
         # records no. correctly classified and total
         # records loss
-        batch_index = self.epoch*self.epoch_size + batch_index
 
         if not should_update:
             if self.net.training:
