@@ -1,3 +1,4 @@
+import torch
 from torch.optim import SGD
 
 
@@ -22,7 +23,7 @@ class MaskedSGD(SGD):
             dampening = group['dampening']
             nesterov = group['nesterov']
 
-            if not hasattr(group, 'masks'):
+            if not 'masks' in group:
                 group['masks'] = [None]*len(group['params'])
 
             for m,p in zip(group['masks'],group['params']):
@@ -47,7 +48,7 @@ class MaskedSGD(SGD):
                 p.data.add_(-group['lr'], d_p)
                 # apply mask if we have one
                 if m is not None:
-                    p.data.mul_(m)
+                    p.data.mul_(m.data)
 
         return loss
 
