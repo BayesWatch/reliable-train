@@ -190,6 +190,7 @@ class Checkpoint(object):
         # backward pass and update if should_update is true
         # records no. correctly classified and total
         # records loss
+        batch_index = self.epoch*self.epoch_size + batch_index
 
         if not should_update:
             if self.net.training:

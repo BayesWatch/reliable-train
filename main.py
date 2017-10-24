@@ -63,6 +63,8 @@ def main(args):
 
     # Set where to save and load checkpoints, use model_tag for directory name
     model_tag = format_model_tag(args.model, args.model_multiplier, args.l1)
+    if args.deep_compression:
+        model_tag += '.dc'
     checkpoint_loc = os.path.join(args.scratch, 'checkpoint', model_tag)
     if not os.path.isdir(checkpoint_loc):
         os.makedirs(checkpoint_loc)
