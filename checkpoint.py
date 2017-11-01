@@ -229,6 +229,9 @@ class Checkpoint(object):
             self.summary_writer.add_scalar('train/loss', loss, example_idx)
             self.summary_writer.add_scalar('train/accuracy', acc, example_idx)
             self.summary_writer.add_scalar('train/learning_rate', lr, example_idx)
+            net_sparsity = sparsity(self.net if not isinstance(self.net,
+                                    torch.nn.DataParallel) else self.net.module)
+            self.summary_writer.add_scalar('train/sparsity', net_sparsity, example_idx)
             # if we've reached a high enough batch then sparsify
             if hasattr(self.optimizer, 'sparsify'):
                 self.sparsify(batch_index)
