@@ -28,6 +28,7 @@ def parse():
     parser.add_argument('--scratch', '-s', default=os.environ.get('SCRATCH',os.getcwd()), help='place to store data')
     parser.add_argument('--lr', default=0.1, help='learning rate')
     parser.add_argument('--l1', default=0., type=float, help='l1 regularisation factor')
+    parser.add_argument('--l2', default=5e-4, type=float, help='l2 regularisation factor')
     parser.add_argument('--lr_decay', default=0.01, help='learning rate decay coefficient')
     parser.add_argument('--minibatch', '-M', default=128, help='minibatch size')
     parser.add_argument('--epochs', '-N', default=180, help='number of epochs to train for')
@@ -110,7 +111,8 @@ def main(args):
 
     checkpoint = Checkpoint(model, args.lr, args.lr_decay, args.minibatch,
             schedule, checkpoint_loc, log_loc, verbose=args.v,
-            multi_gpu=args.multi_gpu, l1_factor=args.l1, Optimizer=Optimizer)
+            multi_gpu=args.multi_gpu, l1_factor=args.l1, l2_factor=args.l2,
+            Optimizer=Optimizer)
 
     #@exit_after(240)
     def train(checkpoint, trainloader):
