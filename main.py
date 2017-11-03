@@ -39,6 +39,7 @@ def parse():
     parser.add_argument('-v', action='store_true', help='verbose with progress bar')
     parser.add_argument('--evaluate', action='store_true', help='run on test set')
     parser.add_argument('--deep_compression', action='store_true', help='use deep compression to sparsify')
+    parser.add_argument('--clean', action='store_true', help='Whether to start from clean (WILL DELETE OLD FILES).')
     #parser.add_argument('--sgdr', action='store_true', help='use the SGDR learning rate schedule')
     args = parser.parse_args()
     return args
@@ -67,13 +68,28 @@ def main(args):
     if args.deep_compression:
         model_tag += '.dc'
     checkpoint_loc = os.path.join(args.scratch, 'checkpoint', model_tag)
+    # Set where to append tensorboard logs
+    log_loc = os.path.join(args.scratch, 'logs', model_tag)
     if not os.path.isdir(checkpoint_loc):
         os.makedirs(checkpoint_loc)
+    if os.path.exists(checkpoint_loc) and args.clean:
+        are_you_sure = input("Deleting ALL EXPERIMENTS in %s, and ALL LOGS in %s is that OK? (y/n)"%(checkpoint_loc, log_loc))
+        if are_you_sure == 'y':
+            import shutil
+            def try_delete(loc):
+                try:
+                    shutil.rmtree(loc)
+                except FileNotFoundError:
+                    print("%s already clean, nothing to delete"%loc)
+            print("Deleting checkpoints in %s..."%checkpoint_loc)
+            try_delete(checkpoint_loc)
+            print("Deleting logs in %s..."%log_loc)
+            try_delete(log_loc)
+        else:
+            return None
     if args.v:
         print("Checkpoint saved to: %s"%checkpoint_loc)
 
-    # Set where to append tensorboard logs
-    log_loc = os.path.join(args.scratch, 'logs', model_tag)
     if not os.path.isdir(log_loc):
         os.makedirs(log_loc)
     if args.v:
