@@ -16,7 +16,7 @@ from torch.autograd import Variable
 
 import numpy as np
 
-from utils import ProgressBar, format_l1
+from utils import ProgressBar, format_l1, format_l2
 from checkpoint import Checkpoint
 from data import cifar10
 from seppuku import exit_after
@@ -44,9 +44,9 @@ def parse():
     args = parser.parse_args()
     return args
 
-def format_model_tag(model, model_multiplier, l1):
+def format_model_tag(model, model_multiplier, l1, l2):
     if 'resnet' in model:
-        model_tag = model+".%02d"%model_multiplier+format_l1(l1)
+        model_tag = model+".%02d"%model_multiplier+format_l1(l1)+format_l2(l2)
     else:
         model_tag = model
     return model_tag
@@ -64,7 +64,7 @@ def main(args):
     trainloader, valloader, testloader = cifar10(args.scratch, args.minibatch, verbose=args.v)
 
     # Set where to save and load checkpoints, use model_tag for directory name
-    model_tag = format_model_tag(args.model, args.model_multiplier, args.l1)
+    model_tag = format_model_tag(args.model, args.model_multiplier, args.l1, args.l2)
     if args.deep_compression:
         model_tag += '.dc'
     checkpoint_loc = os.path.join(args.scratch, 'checkpoint', model_tag)
@@ -185,7 +185,7 @@ def main(args):
 if __name__ == '__main__':
     args = parse()
     # initialise logging
-    model_tag = format_model_tag(args.model, args.model_multiplier, args.l1)
+    model_tag = format_model_tag(args.model, args.model_multiplier, args.l1, args.l2)
     if args.deep_compression:
         model_tag += '.dc'
     logging_loc = os.path.join(args.scratch, 'checkpoint', model_tag, 'errors.log')
