@@ -58,7 +58,7 @@ class MaskedSGD(SGD):
         for group in self.param_groups:
             group['masks'] = []
             for p in group['params']:
-                group['masks'].append(torch.gt(p,0.02).float())
+                group['masks'].append(torch.gt(torch.abs(p),0.02).float())
 
     def maybe_sparsify(self, batch_index, threshold):
         # only sparsify once, when over the threshold
