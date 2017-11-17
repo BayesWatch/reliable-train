@@ -279,3 +279,6 @@ def write_status(log_filename, checkpoint_loc, sgdr_or_not):
 
 def format_l1(l1):
     return (".l1_%.01E"%l1).lower().replace("0", "")
+
+def format_l2(l1):
+    return (".l2_%.01E"%l1).lower().replace("0", "")
