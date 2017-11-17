@@ -58,8 +58,9 @@ class Linear(nn.Module):
         if self.training:
             # when training, add noise for variational mc
             mu = F.linear(input, self.weight, None)
-            si = torch.sqrt(F.linear(torch.pow(input,2),
-                            torch.exp(self.log_alpha)*torch.pow(self.weight,2), None)+1e-8)
+            inp2, w2 = torch.pow(input, 2), torch.pow(self.weight, 2)
+            si = torch.sqrt(F.linear(inp2,
+                            torch.exp(self.log_alpha)*w2, None)+1e-8)
             noise = Variable(torch.randn(mu.size()))
             noise = noise.cuda() if si.is_cuda else noise
             a = mu + si*noise
@@ -172,11 +173,11 @@ def recent_sparsity(model):
     return float(active/total)
 
 def variational_regulariser(model, N):
-    divergence = 0.
+    log_alphas = []
     for module in model.modules():
         if hasattr(module, 'log_alpha'):
-            divergence += dkl_qp(module.log_alpha)
-    return (1./N)*divergence
+            log_alphas.append(module.log_alpha.view(-1))
+    return (1./N)*dkl_qp(torch.cat(log_alphas))
 
 def test():
     net = Linear(32,10)
@@ -238,10 +239,25 @@ def test():
             x = self.fc2(x)
             return F.log_softmax(x)
 
-    model = Net()
+    class FCNet(nn.Module):
+        def __init__(self):
+            super(FCNet, self).__init__()
+            self.fc1 = Linear(28*28, 100)
+            self.fc2 = Linear(100, 10)
+            #for m in self.modules():
+            #    print("initialising %s"%m)
+            #    nn.init.xavier_normal(m.weight)
+
+        def forward(self, x):
+            x = x.view(-1, 28*28)
+            x = F.relu(self.fc1(x))
+            x = self.fc2(x)
+            return F.log_softmax(x)
+
+    model = FCNet()
     if cuda:
         model.cuda()
-    optimizer = optim.Adam(model.parameters(), 1e-4, eps=1e-6)
+    optimizer = optim.Adam(model.parameters(), 1e-3, eps=1e-6)
 
     def train(epoch):
         model.train()
@@ -251,9 +267,9 @@ def test():
             data, target = Variable(data), Variable(target)
             optimizer.zero_grad()
             output = model(data)
-            loss = F.cross_entropy(output, target, size_average=True)
-            if batch_idx > 10 or epoch > 1:
-                loss += variational_regulariser(model, len(train_loader))
+            loss = F.nll_loss(output, target, size_average=True)
+            #if batch_idx > 10 or epoch > 1:
+            loss += variational_regulariser(model, len(train_loader))
             loss.backward()
             optimizer.step()
             if batch_idx % 10 == 0:
