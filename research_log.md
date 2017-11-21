@@ -118,3 +118,19 @@ sparsification. The paper suggests that it may be better to sparsify more
 slowly, training in between, but I haven't tried that yet. Running for
 longer to make sure.
 
+6th November 2017
+-----------------
+
+Tested the deep compression after fixing an embarrassing bug (not taking
+the absolute value before less than). Was able to get reasonable results
+across a range of l2 values:
+
+* L2 5e-3: 0.051% active parameters, 72.82% validation accuracy
+* L2 1e-3: 1.0% active parameters, 91.5% validation accuracy
+* L2 5e-4: 2.4% active parameters, 92.4% validation accuracy
+* L2 5e-5: 10.45% active parameters, 92.5% validation accuracy
+
+Interesting to note that immediately after setting all values less than
+0.02 to zero there is a short period where sparsifification increases. Some
+more parameters have to go to zero for the network to reconfigure itself
+to get its recent performance back.
