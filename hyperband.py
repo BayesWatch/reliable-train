@@ -5,7 +5,7 @@ killed.
 
 import math
 import pickle
-
+import imp
 import subprocess
 import argparse
 import os
@@ -20,24 +20,18 @@ import numpy as np
 import torch
 n_gpus = torch.cuda.device_count()
 
-from checkpoint import format_settings_str
-from utils import format_l1
+#from checkpoint import format_settings_str
+#from utils import format_l1
 
-def get_random_config(rng):
-    learning_rate = np.exp(rng.uniform(low=np.log(0.01), high=np.log(0.4)))
-    lr_decay = rng.uniform(low=0., high=0.5)
-    minibatch_size = 2**rng.randint(low=6, high=9)
-    return learning_rate, lr_decay, minibatch_size
-
-def parse():
-    parser = argparse.ArgumentParser(description='Hyperband optimiser, runs configs using the `main.py` script.')
-    parser.add_argument('--model_multiplier', default=4, type=int, help='multiplier for number of planes in model')
-    parser.add_argument('--model', default='resnet50', type=str, help='string referring to model to use')
-    parser.add_argument('--max_iter', default=180, type=int, help='maximum number of iterations any model can be run')
-    parser.add_argument('--eta', default=5., type=float, help='downsampling rate')
-    parser.add_argument('--l1', default=0., type=float, help='l1 coefficient')
-    parser.add_argument('--dry', action='store_true', help='dry run')
-    return parser.parse_args()
+parser = argparse.ArgumentParser(description='Hyperband optimiser, runs configurations on the supplied --script.') 
+#parser.add_argument('--model_multiplier', default=4, type=int, help='multiplier for number of planes in model')
+#parser.add_argument('--model', default='resnet50', type=str, help='string referring to model to use')
+parser.add_argument('script', type=str, help='script implementing experiment to run')
+parser.add_argument('--max_iter', default=180, type=int, help='maximum number of iterations any model can be run')
+parser.add_argument('--eta', default=5., type=float, help='downsampling rate')
+#parser.add_argument('--l1', default=0., type=float, help='l1 coefficient')
+parser.add_argument('--dry', action='store_true', help='dry run')
+parser.add_argument('--clean', action='store_true', help='deletes all logs and state files, then runs, **use with caution**')
 
 class Hyperband(object):
     """
@@ -63,11 +57,11 @@ class Hyperband(object):
 
             # depth versus width controls of successive halving inner loop
             self.s_list = list(range(self.s_max+1))
-            
+
             self.iterations_complete = 0 # track how many we've done
-            
+
     def pickle_fname(self):
-        return run_identity()+".hyperband_state.pkl"
+        return run_identity+".hyperband_state.pkl"
 
     def load_state(self):
         with open(self.pickle_fname(), "rb") as f:
@@ -86,7 +80,8 @@ class Hyperband(object):
             r = self.max_iter*self.eta**(-s)
 
             if not hasattr(self, 'inner_loop'):
-                self.T = [ get_random_config(self.rng) for i in range(n) ]
+                self.T_ids = [ get_random_config_id(self.rng) for i in range(n) ]
+                self.T = [ get_config(config_id) for config_id in self.T_ids ]
                 self.inner_loop = list(range(s+1))
                 self.completed = 0
             while len(self.inner_loop) > 0:
@@ -109,7 +104,7 @@ class Hyperband(object):
                     iter_rate = (time.time() - before)/float(len(chunk)*r_i)
                     self.iterations_complete += len(chunk)*(r_i-self.completed)
                     val_losses[np.array(idxs)] = results
-                    yield self.progress(s, i, (j+1)*len(chunk), len(self.T), np.min(val_losses), self.T[np.argmin(val_losses)], iter_rate)
+                    yield self.progress(s, i, (j+1)*len(chunk), len(self.T), np.min(val_losses), self.T_ids[np.argmin(val_losses)], iter_rate)
                 # keep track of how many epochs the saved checkpoints have completed already
                 self.completed = r_i
 
@@ -118,6 +113,7 @@ class Hyperband(object):
             _ = self.s_list.pop()
             del self.inner_loop
             del self.T
+            del self.T_ids
 
     def progress(self, outer_loc, inner_loc, settings_idx, n_settings, best_loss, best_settings, iter_rate):
         """Writes a string defining the current progress of the optimisation."""
@@ -128,7 +124,7 @@ class Hyperband(object):
         remaining = self.total_iterations - self.iterations_complete
         progress_str += "time to complete %04.1f hours, "%((iter_rate*remaining)/(60.**2))
         progress_str += "best_loss %05.3f with "%(best_loss)
-        progress_str += format_settings_str(*best_settings)
+        progress_str += best_settings
         return progress_str
 
     def preamble(self, dry=False):
@@ -145,7 +141,8 @@ class Hyperband(object):
             r = self.max_iter*self.eta**(-s)
             completed = 0
 
-            T = [ get_random_config(self.rng) for i in range(n) ]
+            T_ids = [ get_random_config_id(self.rng) for i in range(n) ]
+            T = [ get_config(config_id) for config_id in T_ids ]
             for i in range(s+1):
                 # run each config for r_i iterations
                 n_i = n*self.eta**(-i)
@@ -187,11 +184,11 @@ class Hyperband(object):
 
 def parallel_call(settings_to_run, n_iterations, completed):
     if len(settings_to_run) == 1:
-        result = run_settings(settings_to_run[0], n_iterations, None,
+        result = run_experiment(settings_to_run[0], n_iterations, None,
                 timeout=(n_iterations-completed)*240, multi_gpu=True)
         results = [result]
     else:
-        call = lambda settings, gpu_index: run_settings(settings, n_iterations, gpu_index, timeout=n_iterations*240)
+        call = lambda settings, gpu_index: run_experiment(settings, n_iterations, gpu_index, timeout=n_iterations*240)
         with ThreadPoolExecutor(max_workers=n_gpus) as executor:
             results = executor.map(call, settings_to_run, range(n_gpus), timeout=n_iterations*500)
             
@@ -202,29 +199,30 @@ def parallel_call(settings_to_run, n_iterations, completed):
     #return np.array(list(results))
 
 if __name__ == '__main__':
-    args = parse()
-    def run_identity():
-       myhost = os.uname()[1].split(".")[0]
-       return myhost+".%02d"%args.model_multiplier + format_l1(args.l1)+".%s"%args.model
+    args, unknown_args = parser.parse_known_args()
+    # pull required functions out of supplied scripts
+    script = imp.new_module('script')
+    with open(args.script, 'r') as f:
+        exec(f.read(), script.__dict__)
+    # identity of the run depends on what args the script gets passed
+    run_identity = script.run_identity(unknown_args)
+    get_random_config_id = script.get_random_config_id
+    get_config = script.get_config
 
-    def run_settings(settings, n_i, gpu_index, timeout, multi_gpu=False):
+    def run_experiment(settings, n_i, gpu_index, timeout, multi_gpu=False):
+        options = ["%f"%s for s in settings]
         if multi_gpu:
-            options = ["--multi_gpu"]
+            options += ["--multi_gpu"]
         else:
-            options = ["--gpu","%i"%gpu_index]
-        options += ["--lr","%f"%settings[0]]
-        options += ["--lr_decay","%f"%settings[1]]
-        options += ["--minibatch","%i"%settings[2]]
+            options += ["--gpu","%i"%gpu_index]
         options += ["--epochs","%i"%n_i]
-        options += ["--model_multiplier","%i"%args.model_multiplier]
-        options += ["--l1","%f"%args.l1]
-        options += ["--model",args.model]
+        options += unknown_args # pass any unknown args to the script
         try:
-            command = ['python', 'main.py']+options
+            command = ['python', args.script]+options
             logging.info("RUNNING:  "+ " ".join(command))
             out = subprocess.check_output(command, stderr=subprocess.STDOUT, timeout=timeout)
             loss = float(out.decode("utf-8").split("\n")[-2])
-            logging.info("COMPLETE: "+ " ".join(command)+" LOSS: %.3f"%loss)
+            logging.info("COMPLETE: "+ " ".join(command)+" RESULT: %.3f"%loss)
             return loss
         except KeyboardInterrupt as e:
             raise e
@@ -242,14 +240,18 @@ if __name__ == '__main__':
             logging.info("FAILED:   "+ " ".join(command) + " ERROR: "+ error)
             return 100.0
 
-    # initialise logging
-    logging.basicConfig(filename=run_identity()+".hyperband.log", level=logging.DEBUG)
+    # clean up state before starting, if specified
+    if args.clean:
+        os.remove(run_identity+".hyperband.log")
+        os.remove(run_identity+".hyperband_state.pkl")
+
+    logging.basicConfig(filename=run_identity+".hyperband.log", level=logging.DEBUG)
 
     h = Hyperband(max_iter=args.max_iter, eta=args.eta)
     h.preamble(dry=args.dry)
     if not args.dry:
         for progress in h:
-            # update progress bar here
+            # simple progress bar
             logging.info("PROGRESS: " + progress)
             sys.stdout.write(progress)
             sys.stdout.write("\r")
