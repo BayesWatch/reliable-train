@@ -17,20 +17,21 @@ from torch.autograd import Variable
 import numpy as np
 
 from utils import ProgressBar, format_l1, format_l2
-from checkpoint import Checkpoint
+from checkpoint import Checkpoint, format_settings_str
 from data import cifar10
 from seppuku import exit_after
 
 from itertools import combinations
 
-def parse():
+def parse(to_parse=None):
     parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training\nlearning rate will decay every 60 epochs')
+    parser.add_argument('config_id', type=str, help='config identity str, parsed for lr, lr_decay and minibatch size, looks like: "<lr>_<lr_decay>_<minibatch_size>"')
     parser.add_argument('--scratch', '-s', default=os.environ.get('SCRATCH',os.getcwd()), help='place to store data')
-    parser.add_argument('--lr', default=0.1, help='learning rate')
+    #parser.add_argument('--lr', default=0.1, help='learning rate')
     parser.add_argument('--l1', default=0., type=float, help='l1 regularisation factor')
     parser.add_argument('--l2', default=5e-4, type=float, help='l2 regularisation factor')
-    parser.add_argument('--lr_decay', default=0.01, help='learning rate decay coefficient')
-    parser.add_argument('--minibatch', '-M', default=128, help='minibatch size')
+    #parser.add_argument('--lr_decay', default=0.01, help='learning rate decay coefficient')
+    #parser.add_argument('--minibatch', '-M', default=128, help='minibatch size')
     parser.add_argument('--epochs', '-N', default=180, help='number of epochs to train for')
     parser.add_argument('--gpu', default=0, help='index of gpu to use')
     parser.add_argument('--multi_gpu', action='store_true', help='use all available gpus')
@@ -41,14 +42,26 @@ def parse():
     parser.add_argument('--deep_compression', action='store_true', help='use deep compression to sparsify')
     parser.add_argument('--clean', action='store_true', help='Whether to start from clean (WILL DELETE OLD FILES).')
     #parser.add_argument('--sgdr', action='store_true', help='use the SGDR learning rate schedule')
-    args = parser.parse_args()
+    args = parser.parse_args(to_parse)
     return args
 
-def get_random_config(rng):
+# define run_identity for hyperband
+def run_identity(argv):
+    argv = ["dummy_config"] + argv # have to supply something or hit an error
+    args = parse(argv)
+    myhost = os.uname()[1].split(".")[0]
+    return myhost+".mm%02d"%args.model_multiplier + format_l1(args.l1)+".%s"%args.model
+
+def get_random_config_id(rng):
     learning_rate = np.exp(rng.uniform(low=np.log(0.01), high=np.log(0.4)))
     lr_decay = rng.uniform(low=0., high=0.5)
     minibatch_size = 2**rng.randint(low=6, high=9)
-    return learning_rate, lr_decay, minibatch_size
+    config_id = format_settings_str(learning_rate, lr_decay, minibatch_size)
+    return config_id
+
+def get_config(config_id):
+    config = config_id.split("_")
+    return float(config[0]), float(config[1]), int(config[2])
 
 def format_model_tag(model, model_multiplier, l1, l2):
     if 'resnet' in model:
@@ -67,7 +80,10 @@ def main(args):
 
     n_gpus = torch.cuda.device_count()
 
-    trainloader, valloader, testloader = cifar10(args.scratch, args.minibatch, verbose=args.v)
+    # parse out config
+    lr, lr_decay, minibatch = get_config(args.config_id)
+
+    trainloader, valloader, testloader = cifar10(args.scratch, minibatch, verbose=args.v)
 
     # Set where to save and load checkpoints, use model_tag for directory name
     model_tag = format_model_tag(args.model, args.model_multiplier, args.l1, args.l2)
@@ -131,7 +147,7 @@ def main(args):
     else:
         Optimizer = optim.SGD
 
-    checkpoint = Checkpoint(model, args.lr, args.lr_decay, args.minibatch,
+    checkpoint = Checkpoint(model, lr, lr_decay, minibatch,
             schedule, checkpoint_loc, log_loc, verbose=args.v,
             multi_gpu=args.multi_gpu, l1_factor=args.l1, l2_factor=args.l2,
             Optimizer=Optimizer)
@@ -190,10 +206,6 @@ def main(args):
 
 if __name__ == '__main__':
     args = parse()
-    # define run_identity for hyperband
-    def run_identity():
-       myhost = os.uname()[1].split(".")[0]
-       return myhost+".%02d"%args.model_multiplier + format_l1(args.l1)+".%s"%args.model
 
     # initialise logging
     model_tag = format_model_tag(args.model, args.model_multiplier, args.l1, args.l2)

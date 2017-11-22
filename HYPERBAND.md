@@ -34,9 +34,6 @@ minimise.
 describes a particular randomly sampled configuration. For example, it
 could produce `lr:0.01.batch_size:256`, because we can recover those
 hyperparameter settings from this string using...
-5. A function called `get_config` that takes a `config_id` string, and
-outputs a tuple of the configuration variables in the types they are
-supposed to be in.
 6. You script must implement a function called `run_identity` that takes
 any optional arguments your script could receive, and returns a string
 uniquely defining these. This allows your script to implement more than one
@@ -45,8 +42,8 @@ separate hyperparameter search with hyperband on different models, you
 could make an optional argument that would do this. Then, your
 `run_identity` function just needs to find the `--model` argument and
 return it as a string.
-7. It takes configuration settings as positional arguments on the command
-line. And it takes as many as are produced by `get_config`.
+7. It takes `config_id` as the first positional argument on the command
+line.
 8. It saves the model it's currently training after training for a given
 number of epochs and this model is saved to a file that is unique *for that
 configuration setting*.
@@ -61,6 +58,11 @@ The `hyperband.py` script will also catch any errors your script throws and
 write them to its log file. It will also assign an arbitrary high loss
 value of 100 whenever this happens. If you are doing some experiment where
 100 isn't an arbitrarily high loss then this could cause problems.
+
+This may seem like a lot of requirements, but there's not much that can be
+done about it. This is not a black box optimiser, so it has to make some
+assumptions about the box being optimised. For a concrete example, see the
+script `dummy.py` implementing a dummy experiment for optimisation. 
 
 ## Recommended functionality
 

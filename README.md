@@ -5,7 +5,8 @@ for some epochs then discards half, so optimisation looks like this:
 ![](images/val_step.png)
 
 But how do we run all these model configurations? In this repo, we throw
-them into pytorch in batches equal to the size of your GPU:
+a model into each GPU on each iteration. You can see this happening when we
+look at *wall time*:
 
 ![](images/val_wall.png)
 
@@ -35,6 +36,13 @@ are throwing away half of the worst performing models after training them
 all for a specified length of time.
 
 [hyperband]: https://people.eecs.berkeley.edu/~kjamieson/hyperband.html
+
+## Using Hyperband
+
+If you want to use the Hyperband implementation defined here on some other
+problem, it shouldn't be too difficult to do so. However, you may have to
+modify the script that runs your experiment. Documentation on how this can
+be done is [here](HYPERBAND.md).
 
 ## Checkpoints
 
