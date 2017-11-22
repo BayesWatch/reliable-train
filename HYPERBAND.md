@@ -18,7 +18,8 @@ python hyperband.py -h
 
 *However*, while this interface is simple, it makes several assumptions
 about your script (the first of which is that your script is written in
-Python):
+Python). The following list looks scary, you may prefer for me to just say
+it has to have the same functionality as [`dummy.py`](dummy.py).
 
 1. Your script will *only run the experiment when called from the
 command line* (another way of saying this is that it correctly incorporates
