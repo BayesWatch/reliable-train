@@ -44,6 +44,12 @@ def parse():
     args = parser.parse_args()
     return args
 
+def get_random_config(rng):
+    learning_rate = np.exp(rng.uniform(low=np.log(0.01), high=np.log(0.4)))
+    lr_decay = rng.uniform(low=0., high=0.5)
+    minibatch_size = 2**rng.randint(low=6, high=9)
+    return learning_rate, lr_decay, minibatch_size
+
 def format_model_tag(model, model_multiplier, l1, l2):
     if 'resnet' in model:
         model_tag = model+".%02d"%model_multiplier+format_l1(l1)+format_l2(l2)
@@ -184,6 +190,11 @@ def main(args):
 
 if __name__ == '__main__':
     args = parse()
+    # define run_identity for hyperband
+    def run_identity():
+       myhost = os.uname()[1].split(".")[0]
+       return myhost+".%02d"%args.model_multiplier + format_l1(args.l1)+".%s"%args.model
+
     # initialise logging
     model_tag = format_model_tag(args.model, args.model_multiplier, args.l1, args.l2)
     if args.deep_compression:
