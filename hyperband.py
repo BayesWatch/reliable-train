@@ -17,19 +17,14 @@ from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 
-import torch
-n_gpus = torch.cuda.device_count()
-
-#from checkpoint import format_settings_str
-#from utils import format_l1
+# framework agnostic way to count gpus
+from glob import glob
+n_gpus = len(glob("/proc/driver/nvidia/gpus/*"))
 
 parser = argparse.ArgumentParser(description='Hyperband optimiser, runs configurations on the supplied --script.') 
-#parser.add_argument('--model_multiplier', default=4, type=int, help='multiplier for number of planes in model')
-#parser.add_argument('--model', default='resnet50', type=str, help='string referring to model to use')
 parser.add_argument('script', type=str, help='script implementing experiment to run')
 parser.add_argument('--max_iter', default=180, type=int, help='maximum number of iterations any model can be run')
 parser.add_argument('--eta', default=5., type=float, help='downsampling rate')
-#parser.add_argument('--l1', default=0., type=float, help='l1 coefficient')
 parser.add_argument('--dry', action='store_true', help='dry run')
 parser.add_argument('--clean', action='store_true', help='deletes all logs and state files, then runs, **use with caution**')
 
@@ -193,10 +188,6 @@ def parallel_call(settings_to_run, n_iterations, completed):
             results = executor.map(call, settings_to_run, range(n_gpus), timeout=n_iterations*500)
             
     return np.array(list(results))
-    #results = []
-    #for s, i in zip(settings_to_run, range(n_gpus)):
-    #    results.append(call(s, i))
-    #return np.array(list(results))
 
 if __name__ == '__main__':
     args, unknown_args = parser.parse_known_args()
@@ -257,4 +248,5 @@ if __name__ == '__main__':
             sys.stdout.write("\r")
             sys.stdout.flush()
         sys.stdout.write("\n")
+
 
