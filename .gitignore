@@ -80,3 +80,6 @@ data
 
 # ignore pkls
 *.pkl
+
+# don't commit dummy files
+dummy

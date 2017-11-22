@@ -75,8 +75,7 @@ class Hyperband(object):
             r = self.max_iter*self.eta**(-s)
 
             if not hasattr(self, 'inner_loop'):
-                self.T_ids = [ get_random_config_id(self.rng) for i in range(n) ]
-                self.T = [ get_config(config_id) for config_id in self.T_ids ]
+                self.T = [ get_random_config_id(self.rng) for i in range(n) ]
                 self.inner_loop = list(range(s+1))
                 self.completed = 0
             while len(self.inner_loop) > 0:
@@ -99,7 +98,7 @@ class Hyperband(object):
                     iter_rate = (time.time() - before)/float(len(chunk)*r_i)
                     self.iterations_complete += len(chunk)*(r_i-self.completed)
                     val_losses[np.array(idxs)] = results
-                    yield self.progress(s, i, (j+1)*len(chunk), len(self.T), np.min(val_losses), self.T_ids[np.argmin(val_losses)], iter_rate)
+                    yield self.progress(s, i, (j+1)*len(chunk), len(self.T), np.min(val_losses), self.T[np.argmin(val_losses)], iter_rate)
                 # keep track of how many epochs the saved checkpoints have completed already
                 self.completed = r_i
 
@@ -108,7 +107,6 @@ class Hyperband(object):
             _ = self.s_list.pop()
             del self.inner_loop
             del self.T
-            del self.T_ids
 
     def progress(self, outer_loc, inner_loc, settings_idx, n_settings, best_loss, best_settings, iter_rate):
         """Writes a string defining the current progress of the optimisation."""
@@ -136,8 +134,7 @@ class Hyperband(object):
             r = self.max_iter*self.eta**(-s)
             completed = 0
 
-            T_ids = [ get_random_config_id(self.rng) for i in range(n) ]
-            T = [ get_config(config_id) for config_id in T_ids ]
+            T = [ get_random_config_id(self.rng) for i in range(n) ]
             for i in range(s+1):
                 # run each config for r_i iterations
                 n_i = n*self.eta**(-i)
@@ -198,10 +195,9 @@ if __name__ == '__main__':
     # identity of the run depends on what args the script gets passed
     run_identity = script.run_identity(unknown_args)
     get_random_config_id = script.get_random_config_id
-    get_config = script.get_config
 
     def run_experiment(settings, n_i, gpu_index, timeout, multi_gpu=False):
-        options = ["%f"%s for s in settings]
+        options = [settings]
         if multi_gpu:
             options += ["--multi_gpu"]
         else:
