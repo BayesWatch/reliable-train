@@ -179,7 +179,6 @@ def main(args):
                 progress_str = ''
                 progress_str += checkpoint.progress()
                 progress_bar(batch_idx, len(loader), progress_str)
-
         if save:
             checkpoint.save_recent()
         return None
