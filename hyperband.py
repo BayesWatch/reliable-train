@@ -13,8 +13,6 @@ import sys
 import time
 import logging
 
-from concurrent.futures import ThreadPoolExecutor
-
 import numpy as np
 
 # framework agnostic way to count gpus
@@ -175,16 +173,22 @@ class Hyperband(object):
         logging.info("PREAMBLE:\n"+preamble_str)
 
 def parallel_call(settings_to_run, n_iterations, completed):
+    experiments = []
     if len(settings_to_run) == 1:
-        result = run_experiment(settings_to_run[0], n_iterations, None,
+        e = Experiment(settings_to_run[0], n_iterations, None,
                 timeout=(n_iterations-completed)*240, multi_gpu=True)
-        results = [result]
+        experiments.append(e)
     else:
-        call = lambda settings, gpu_index: run_experiment(settings, n_iterations, gpu_index, timeout=n_iterations*240)
-        with ThreadPoolExecutor(max_workers=n_gpus) as executor:
-            results = executor.map(call, settings_to_run, range(n_gpus), timeout=n_iterations*500)
-            
-    return np.array(list(results))
+        for gpu_idx, s in enumerate(settings_to_run):
+            e = Experiment(s, n_iterations, gpu_idx,
+                timeout=(n_iterations-completed)*240)
+            experiments.append(e)
+    # poll all processes until they're all done
+    while all([e.process.poll() is None for e in experiments]):
+        time.sleep(0.5)
+    # gather results from each process
+    results = [e.get_result() for e in experiments]
+    return np.array(results)
 
 if __name__ == '__main__':
     args, unknown_args = parser.parse_known_args()
@@ -196,43 +200,38 @@ if __name__ == '__main__':
     run_identity = script.run_identity(unknown_args)
     get_random_config_id = script.get_random_config_id
 
-    def run_experiment(settings, n_i, gpu_index, timeout, multi_gpu=False):
-        options = [settings]
-        if multi_gpu:
-            options += ["--multi_gpu"]
-        else:
-            options += ["--gpu","%i"%gpu_index]
-        options += ["--epochs","%i"%n_i]
-        options += unknown_args # pass any unknown args to the script
-        try:
-            command = ['python', args.script]+options
-            logging.info("RUNNING:  "+ " ".join(command))
-            out = subprocess.check_output(command, stderr=subprocess.STDOUT, timeout=timeout)
-            loss = float(out.decode("utf-8").split("\n")[-2])
-            logging.info("COMPLETE: "+ " ".join(command)+" RESULT: %.3f"%loss)
-            return loss
-        except KeyboardInterrupt as e:
-            raise e
-        except subprocess.TimeoutExpired as e:
-            error = e.output.decode("utf-8").strip('\n')
-            logging.info("FAILED:   "+ " ".join(command) + " ERROR: "+ error)
-            return 100.
-        except Exception as e:
-            if hasattr(e, 'output'):
-                error = e.output.decode("utf-8").split('\n')[-2]
-                if 'KeyboardInterrupt' in error:
-                    error += " epoch took too long to execute"
+    class Experiment(object):
+        def __init__(self, settings, n_i, gpu_index, timeout, multi_gpu=False):
+            self.options = [settings]
+            if multi_gpu:
+                self.options += ["--multi_gpu"]
             else:
-                error = str(e).strip()
-            logging.info("FAILED:   "+ " ".join(command) + " ERROR: "+ error)
-            return 100.0
+                self.options += ["--gpu","%i"%gpu_index]
+            self.options += ["--epochs","%i"%n_i]
+            self.options += unknown_args # pass any unknown args to the script
+            self.command = ['python', args.script]+self.options
+            logging.info("RUNNING:  "+ " ".join(self.command))
+            self.process = subprocess.Popen(self.command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+        def get_result(self):
+            out, error = self.process.communicate()
+            if self.process.returncode == 1:
+                logging.info("FAILED:   "+ " ".join(self.command) + " ERROR: "+ error.decode("utf-8"))
+                return 100.
+            else:
+
+                loss = float(out.decode("utf-8").split("\n")[-2])
+                logging.info("COMPLETE: "+ " ".join(self.command)+" RESULT: %.3f"%loss)
+                return loss
 
     # clean up state before starting, if specified
-    if args.clean:
+    if args.clean and os.path.exists(run_identity+".hyperband.log"):
         os.remove(run_identity+".hyperband.log")
         os.remove(run_identity+".hyperband_state.pkl")
 
-    logging.basicConfig(filename=run_identity+".hyperband.log", level=logging.DEBUG)
+    logging.basicConfig(filename=run_identity+".hyperband.log",
+            format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s', 
+            datefmt='%m-%d %H:%M', level=logging.DEBUG)
 
     h = Hyperband(max_iter=args.max_iter, eta=args.eta)
     h.preamble(dry=args.dry)

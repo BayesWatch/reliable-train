@@ -212,7 +212,9 @@ if __name__ == '__main__':
     logging_loc = os.path.join(args.scratch, 'checkpoint', model_tag, 'errors.log')
     if not os.path.isdir(os.path.dirname(logging_loc)):
         os.makedirs(os.path.dirname(logging_loc))
-    logging.basicConfig(filename=logging_loc, level=logging.DEBUG)
+    logging.basicConfig(filename=logging_loc,
+            format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s', 
+            datefmt='%m-%d %H:%M', level=logging.DEBUG)
     # useful for logging
     cmdline = "python " + " ".join(sys.argv)
     try:
