@@ -19,7 +19,6 @@ import numpy as np
 from utils import ProgressBar, format_l1, format_l2
 from checkpoint import Checkpoint, format_settings_str
 from data import cifar10
-from seppuku import exit_after
 
 from itertools import combinations
 
@@ -49,8 +48,8 @@ def parse(to_parse=None):
 def run_identity(argv):
     argv = ["dummy_config"] + argv # have to supply something or hit an error
     args = parse(argv)
-    myhost = os.uname()[1].split(".")[0]
-    return myhost+".mm%02d"%args.model_multiplier + format_l1(args.l1)+".%s"%args.model
+    myhost = os.uname()[1].split(".")[0] + "."
+    return myhost + format_model_tag(args.model, args.model_multiplier, args.l1, args.l2, args.deep_compression)
 
 def get_random_config_id(rng):
     learning_rate = np.exp(rng.uniform(low=np.log(0.01), high=np.log(0.4)))
@@ -63,11 +62,13 @@ def get_config(config_id):
     config = config_id.split("_")
     return float(config[0]), float(config[1]), int(config[2])
 
-def format_model_tag(model, model_multiplier, l1, l2):
+def format_model_tag(model, model_multiplier, l1, l2, deep_compression):
     if 'resnet' in model:
         model_tag = model+".%02d"%model_multiplier+format_l1(l1)+format_l2(l2)
     else:
         model_tag = model
+    if deep_compression:
+        model_tag += '.dc'
     return model_tag
 
 def main(args):
@@ -86,9 +87,8 @@ def main(args):
     trainloader, valloader, testloader = cifar10(args.scratch, minibatch, verbose=args.v)
 
     # Set where to save and load checkpoints, use model_tag for directory name
-    model_tag = format_model_tag(args.model, args.model_multiplier, args.l1, args.l2)
-    if args.deep_compression:
-        model_tag += '.dc'
+    model_tag = format_model_tag(args.model, args.model_multiplier, args.l1, args.l2, args.deep_compression)
+
     checkpoint_loc = os.path.join(args.scratch, 'checkpoint', model_tag)
     # Set where to append tensorboard logs
     log_loc = os.path.join(args.scratch, 'logs', model_tag)
@@ -152,7 +152,6 @@ def main(args):
             multi_gpu=args.multi_gpu, l1_factor=args.l1, l2_factor=args.l2,
             Optimizer=Optimizer)
 
-    #@exit_after(240)
     def train(checkpoint, trainloader):
         checkpoint.init_for_epoch(gpu_index, should_update=True, epoch_size=len(trainloader))
 
@@ -168,7 +167,6 @@ def main(args):
         checkpoint.epoch += 1
         return None
     
-    #@exit_after(240)
     def validate(checkpoint, loader, save=False):
         checkpoint.init_for_epoch(gpu_index, should_update=False)
 
@@ -208,7 +206,7 @@ if __name__ == '__main__':
     args = parse()
 
     # initialise logging
-    model_tag = format_model_tag(args.model, args.model_multiplier, args.l1, args.l2)
+    model_tag = format_model_tag(args.model, args.model_multiplier, args.l1, args.l2, args.deep_compression)
     if args.deep_compression:
         model_tag += '.dc'
     logging_loc = os.path.join(args.scratch, 'checkpoint', model_tag, 'errors.log')
