@@ -19,6 +19,7 @@ import numpy as np
 from utils import ProgressBar, format_l2
 from checkpoint import Checkpoint, format_settings_str, sparsity
 from data import cifar10
+from seppuku import exit_after
 
 from itertools import combinations
 
@@ -61,7 +62,7 @@ def get_random_config_id(rng):
 
 def get_config(config_id):
     config = config_id.split("_")
-    return float(config[0]), float(config[1]), int(config[2])
+    return float(config[0]), float(config[1]), float(config[2])
 
 def format_model_tag(model, model_multiplier, l1, l2, deep_compression):
     if 'resnet' in model:
@@ -150,10 +151,10 @@ def main(args):
     n_gpus = torch.cuda.device_count()
 
     # parse out config
-    lr, lr_decay, minibatch = get_config(args.config_id)
+    lr, lr_decay, l1 = get_config(args.config_id)
 
     # load data
-    trainloader, valloader, testloader = cifar10(args.scratch, minibatch, verbose=args.v)
+    trainloader, valloader, testloader = cifar10(args.scratch, args.minibatch, verbose=args.v)
 
     # Set where to save and load checkpoints, use model_tag for directory name
     model_tag = format_model_tag(args.model, args.model_multiplier, args.l1, args.l2, args.deep_compression)
@@ -216,11 +217,12 @@ def main(args):
     else:
         Optimizer = optim.SGD
 
-    checkpoint = Checkpoint(model, lr, lr_decay, minibatch,
+    checkpoint = Checkpoint(model, lr, lr_decay, args.minibatch,
             schedule, checkpoint_loc, log_loc, verbose=args.v,
             multi_gpu=args.multi_gpu, l1_factor=args.l1, l2_factor=args.l2,
             Optimizer=Optimizer)
 
+    @exit_after(240)
     def train(checkpoint, trainloader):
         checkpoint.init_for_epoch(gpu_index, should_update=True, epoch_size=len(trainloader))
 
@@ -239,6 +241,7 @@ def main(args):
         checkpoint.epoch += 1
         return train_loss
     
+    @exit_after(240)
     def validate(checkpoint, loader, save=False):
         checkpoint.init_for_epoch(gpu_index, should_update=False)
 

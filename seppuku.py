@@ -22,8 +22,6 @@ try: # use code that works the same in Python 2 and 3
 except NameError:
     pass
 
-
-
 def cdquit(fn_name):
     # print to stderr, unbuffered in Python 2.
     print('{0} took too long'.format(fn_name), file=sys.stderr)

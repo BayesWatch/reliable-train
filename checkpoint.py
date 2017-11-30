@@ -280,12 +280,13 @@ def format_filename(lr, decay, minibatch_size, acc, loss, epoch):
 def format_settings_str(*settings):
     str_components = []
     for s in settings:
-        if type(s) is float:
-            str_components.append("%06.3f"%s)
+        if type(s) is float or isinstance(s, np.float):
+            if s < 1e-3:
+                str_components.append("%.01E"%s)
+            else:
+                str_components.append("%06.3f"%s)
         elif type(s) is int:
             str_components.append("%05d"%s)
-        elif isinstance(s, np.float):
-            str_components.append("%06.3f"%s)
         else:
             raise ValueError("%s of type %s is not a valid entry"%(s, type(s)))
     return "_".join(str_components)

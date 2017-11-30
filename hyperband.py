@@ -12,6 +12,7 @@ import os
 import sys
 import time
 import logging
+import signal
 
 import numpy as np
 
@@ -184,8 +185,35 @@ def parallel_call(settings_to_run, n_iterations, completed):
                 timeout=(n_iterations-completed)*240)
             experiments.append(e)
     # poll all processes until they're all done
-    while all([e.process.poll() is None for e in experiments]):
+    start = [time.time()]*len(experiments)
+    stop = [0.]*len(experiments)
+    while any([e.process.poll() is None for e in experiments]):
         time.sleep(0.5)
+        for i,running in enumerate([e.process.poll() is None for e in experiments]):
+            if running:
+                stop[i] = time.time()
+        elapsed = [x-y for x,y in zip(stop,start)] # time spent on each process
+        if int(max(elapsed))%60 == 0: # more info when things take too long
+            # if any are taking much longer than others, terminate them
+            average_runtime = float(np.mean(elapsed))
+            for x,e in zip(elapsed, experiments):
+                if x > 1.1*average_runtime and x < 1.5*average_runtime:
+                    logging.info("`%s` running too long, runtime %.1f; average %.1f"%(" ".join(e.command), x, average_runtime))
+                elif x > 1.5*average_runtime:
+                    logging.info("TERMINATING: `%s`, runtime %.1f; average %.1f"%(" ".join(e.command), x, average_runtime))
+                    rc = None
+                    attempts = 0
+                    while rc is None:
+                        try:
+                            if attempts < 5:
+                                e.kill()
+                            else:
+                                e.process.kill()
+                                logging.info("`%s` still refuses to die, sending SIGKILL"%" ".join(e.command))
+                            rc = e.process.wait(timeout=5)
+                        except subprocess.TimeoutExpired:
+                            logging.info("`%s` refuses to die, trying again"%" ".join(e.command))
+                            attempts += 1
     # gather results from each process
     results = [e.get_result() for e in experiments]
     return np.array(results)
@@ -211,18 +239,40 @@ if __name__ == '__main__':
             self.options += unknown_args # pass any unknown args to the script
             self.command = ['python', args.script]+self.options
             logging.info("RUNNING:  "+ " ".join(self.command))
-            self.process = subprocess.Popen(self.command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            self.process = subprocess.Popen(self.command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, 
+                                            start_new_session=False)
+                                            #preexec_fn=os.setsid)
 
         def get_result(self):
-            out, error = self.process.communicate()
+            out = None
+            attempts = 0
+            while out is None:
+                try:
+                    out, error = self.process.communicate(timeout=5)
+                except subprocess.TimeoutExpired:
+                    if attempts < 5:
+                        self.kill()
+                    else:
+                        self.process.kill()
+                    logging.info("TERMINATING:  "+ " ".join(self.command))
+                    attempts += 1
             if self.process.returncode == 1:
                 logging.info("FAILED:   "+ " ".join(self.command) + " ERROR: "+ error.decode("utf-8"))
                 return 100.
+            elif self.process.returncode == -15:
+                logging.info("FAILED:   "+ "ran too long, was terminated" + " ERROR: "+ error.decode("utf-8"))
             else:
-
-                loss = float(out.decode("utf-8").split("\n")[-2])
+                try:
+                    loss = float(out.decode("utf-8").split("\n")[-2])
+                except ValueError:
+                    import pdb
+                    pdb.set_trace()
                 logging.info("COMPLETE: "+ " ".join(self.command)+" RESULT: %.3f"%loss)
                 return loss
+
+        def kill(self):
+            self.process.send_signal(signal.SIGINT)
+            #os.killpg(os.getpgid(self.process.pid), signal.SIGTERM)
 
     # clean up state before starting, if specified
     if args.clean and os.path.exists(run_identity+".hyperband.log"):
