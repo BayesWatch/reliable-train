@@ -187,12 +187,15 @@ def parallel_call(settings_to_run, n_iterations, completed):
     # poll all processes until they're all done
     start = [time.time()]*len(experiments)
     stop = [0.]*len(experiments)
-    while any([e.process.poll() is None for e in experiments]):
+    results = [None]*len(experiments)
+    while any([r is None for r in results]):
         time.sleep(0.5)
         for i,running in enumerate([e.process.poll() is None for e in experiments]):
             if running:
                 stop[i] = time.time()
         elapsed = [x-y for x,y in zip(stop,start)] # time spent on each process
+        for i, e in enumerate(experiments):
+            results[i] = e.maybe_get_result()
         if int(max(elapsed))%60 == 0: # more info when things take too long
             # if any are taking much longer than others, terminate them
             average_runtime = float(np.mean(elapsed))
@@ -214,8 +217,6 @@ def parallel_call(settings_to_run, n_iterations, completed):
                         except subprocess.TimeoutExpired:
                             logging.info("`%s` refuses to die, trying again"%" ".join(e.command))
                             attempts += 1
-    # gather results from each process
-    results = [e.get_result() for e in experiments]
     return np.array(results)
 
 if __name__ == '__main__':
@@ -240,39 +241,26 @@ if __name__ == '__main__':
             self.command = ['python', args.script]+self.options
             logging.info("RUNNING:  "+ " ".join(self.command))
             self.process = subprocess.Popen(self.command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, 
-                                            start_new_session=False)
+                                            start_new_session=True)
                                             #preexec_fn=os.setsid)
 
-        def get_result(self):
-            out = None
-            attempts = 0
-            while out is None:
-                try:
-                    out, error = self.process.communicate(timeout=5)
-                except subprocess.TimeoutExpired:
-                    if attempts < 5:
-                        self.kill()
-                    else:
-                        self.process.kill()
-                    logging.info("TERMINATING:  "+ " ".join(self.command))
-                    attempts += 1
-            if self.process.returncode == 1:
-                logging.info("FAILED:   "+ " ".join(self.command) + " ERROR: "+ error.decode("utf-8"))
-                return 100.
-            elif self.process.returncode == -15:
-                logging.info("FAILED:   "+ "ran too long, was terminated" + " ERROR: "+ error.decode("utf-8"))
-            else:
-                try:
-                    loss = float(out.decode("utf-8").split("\n")[-2])
-                except ValueError:
-                    import pdb
-                    pdb.set_trace()
+        def maybe_get_result(self):
+            out = self.process.stdout.readline()
+            #if len(out)<1:
+            #    return None
+            try:
+                loss = float(out.decode("utf-8").split("\n")[-2])
                 logging.info("COMPLETE: "+ " ".join(self.command)+" RESULT: %.3f"%loss)
+                try:
+                    self.process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    self.kill()
                 return loss
+            except ValueError:
+                return None
 
         def kill(self):
-            self.process.send_signal(signal.SIGINT)
-            #os.killpg(os.getpgid(self.process.pid), signal.SIGTERM)
+            os.killpg(os.getpgid(self.process.pid), signal.SIGTERM)
 
     # clean up state before starting, if specified
     if args.clean and os.path.exists(run_identity+".hyperband.log"):
