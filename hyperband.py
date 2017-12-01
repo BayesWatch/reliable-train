@@ -6,7 +6,6 @@ killed.
 import math
 import pickle
 import imp
-import subprocess
 import argparse
 import os
 import sys
@@ -15,6 +14,8 @@ import logging
 import signal
 
 import numpy as np
+
+import pexpect
 
 # framework agnostic way to count gpus
 from glob import glob
@@ -190,7 +191,7 @@ def parallel_call(settings_to_run, n_iterations, completed):
     results = [None]*len(experiments)
     while any([r is None for r in results]):
         time.sleep(0.5)
-        for i,running in enumerate([e.process.poll() is None for e in experiments]):
+        for i,running in enumerate([r is None for r in results]):
             if running:
                 stop[i] = time.time()
         elapsed = [x-y for x,y in zip(stop,start)] # time spent on each process
@@ -204,19 +205,8 @@ def parallel_call(settings_to_run, n_iterations, completed):
                     logging.info("`%s` running too long, runtime %.1f; average %.1f"%(" ".join(e.command), x, average_runtime))
                 elif x > 1.5*average_runtime:
                     logging.info("TERMINATING: `%s`, runtime %.1f; average %.1f"%(" ".join(e.command), x, average_runtime))
-                    rc = None
-                    attempts = 0
-                    while rc is None:
-                        try:
-                            if attempts < 5:
-                                e.kill()
-                            else:
-                                e.process.kill()
-                                logging.info("`%s` still refuses to die, sending SIGKILL"%" ".join(e.command))
-                            rc = e.process.wait(timeout=5)
-                        except subprocess.TimeoutExpired:
-                            logging.info("`%s` refuses to die, trying again"%" ".join(e.command))
-                            attempts += 1
+                    e.process.terminate()
+                    e.process.wait()
     return np.array(results)
 
 if __name__ == '__main__':
@@ -240,27 +230,24 @@ if __name__ == '__main__':
             self.options += unknown_args # pass any unknown args to the script
             self.command = ['python', args.script]+self.options
             logging.info("RUNNING:  "+ " ".join(self.command))
-            self.process = subprocess.Popen(self.command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, 
-                                            start_new_session=True)
-                                            #preexec_fn=os.setsid)
+            self.process = pexpect.spawn(" ".join(self.command))
+            self.result = None
+            self.result = self.maybe_get_result()
 
         def maybe_get_result(self):
-            out = self.process.stdout.readline()
-            #if len(out)<1:
-            #    return None
+            if self.result is not None:
+                return self.result
             try:
-                loss = float(out.decode("utf-8").split("\n")[-2])
-                logging.info("COMPLETE: "+ " ".join(self.command)+" RESULT: %.3f"%loss)
-                try:
-                    self.process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    self.kill()
-                return loss
-            except ValueError:
+                self.process.expect("loss", timeout=1.)
+                l = self.process.readline()
+                self.process.terminate()
+                self.process.wait()
+            except pexpect.exceptions.EOF:
+                print("end of file?")
+                return None
+            except pexpect.exceptions.TIMEOUT:
                 return None
 
-        def kill(self):
-            os.killpg(os.getpgid(self.process.pid), signal.SIGTERM)
 
     # clean up state before starting, if specified
     if args.clean and os.path.exists(run_identity+".hyperband.log"):
