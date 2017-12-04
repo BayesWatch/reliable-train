@@ -83,3 +83,6 @@ data
 
 # don't commit dummy files
 dummy
+
+# don't commit random results files
+satisficing
