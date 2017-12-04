@@ -27,6 +27,17 @@ from glob import glob
 
 from sklearn.ensemble import ExtraTreesRegressor
 
+import traceback
+import signal
+
+# if we receive SIGTERM, we want to log what we were doing when that happened
+def sigterm_handler(_signo, _stack_frame):
+    sigterm_trace = "    ".join(traceback.format_stack()[:-1])
+    cmdline = " ".join(sys.argv)
+    logging.info("COMMAND RECEIVED SIGTERM: %s was at line:\n"%cmdline+sigterm_trace)
+    sys.exit(1)
+signal.signal(signal.SIGTERM, sigterm_handler)
+
 def parse(to_parse=None):
     parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training\nlearning rate will decay every 60 epochs')
     parser.add_argument('config_id', type=str, help='config identity str, parsed for lr, lr_decay and minibatch size, looks like: "<lr>_<lr_decay>_<minibatch_size>"')
@@ -145,7 +156,8 @@ def main(args):
         progress_bar = ProgressBar()
 
     use_cuda = torch.cuda.is_available()
-    gpu_index = int(args.gpu) if not args.multi_gpu else None
+    # using CUDA_VISIBLE_DEVICES, so this should always be 0
+    gpu_index = 0
     best_acc = 0  # best test accuracy
 
     n_gpus = torch.cuda.device_count()
@@ -290,10 +302,13 @@ def main(args):
                   "Test loss: %.3f\n"%test_loss+
                   "Test accuracy: %.3f"%test_acc)
             return None
-    print(checkpoint.most_recent_saved['loss'])
+    print("%f"%checkpoint.most_recent_saved['loss'])
 
 if __name__ == '__main__':
     args = parse()
+
+    # limit GPU usage
+    os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
     # initialise logging
     model_tag = format_model_tag(args.model, args.model_multiplier, args.l1, args.l2, args.deep_compression)
@@ -316,5 +331,8 @@ if __name__ == '__main__':
         raise
     except KeyboardInterrupt:
         logging.info("COMMAND DIED HONOURABLY: %s"%cmdline)
+    except SystemExit:
+        raise # should already be logged
     except:
         logging.info("COMMAND DIED MYSTERIOUSLY: %s"%cmdline)
+
