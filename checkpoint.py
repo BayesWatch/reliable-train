@@ -41,12 +41,14 @@ class Checkpoint(object):
     """
     def __init__(self, model, initial_lr, lr_decay, minibatch_size,
                  lr_schedule, checkpoint_loc, log_loc, verbose=False,
-                 multi_gpu=False, l1_factor=0., l2_factor=5e-4, Optimizer=optim.SGD):
+                 multi_gpu=False, l1_factor=0., l2_factor=5e-4, Optimizer=optim.SGD,
+                 CriterionConstructor=nn.CrossEntropyLoss):
         self.Optimizer = Optimizer
         self.v = verbose
         self.multi_gpu = multi_gpu
         self.l1_factor = l1_factor
         self.l2_factor = l2_factor
+        self.CriterionConstructor = CriterionConstructor
         # check cuda availability
         self.use_cuda = torch.cuda.is_available()
 
@@ -157,7 +159,7 @@ class Checkpoint(object):
             self.net.cuda(self.gpu_index)
 
         # always set up criterion and optimiser
-        self.criterion = nn.CrossEntropyLoss()
+        self.criterion = self.CriterionConstructor()
         self.optimizer = self.Optimizer(self.net.parameters(), lr=0.1, momentum=0.9, weight_decay=self.l2_factor)
         self.correct, self.total, self.accum_loss = 0, 0, []
 
