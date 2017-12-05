@@ -14,11 +14,11 @@ cfg = {
 
 
 class VGG(nn.Module):
-    def __init__(self, vgg_name, Conv2d=nn.Conv2d, width=1):
+    def __init__(self, vgg_name, Conv2d=nn.Conv2d, Linear=nn.Linear, width=1):
         super(VGG, self).__init__()
         self.width = width
         self.features, classifier_size = self._make_layers(cfg[vgg_name])
-        self.classifier = nn.Linear(classifier_size, 10)
+        self.classifier = Linear(classifier_size, 10)
         self.Conv2d = Conv2d
 
     def forward(self, x):

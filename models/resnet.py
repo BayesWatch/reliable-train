@@ -126,7 +126,7 @@ class PreActBottleneck(nn.Module):
 
 
 class ResNet(nn.Module):
-    def __init__(self, block, num_blocks, Conv2d=nn.Conv2d, num_classes=10, plane_multiplier=4):
+    def __init__(self, block, num_blocks, Conv2d=nn.Conv2d, Linear=nn.Linear, num_classes=10, plane_multiplier=4):
         super(ResNet, self).__init__()
         self.in_planes = 4*2**plane_multiplier
         self.Conv2d = Conv2d
@@ -138,7 +138,7 @@ class ResNet(nn.Module):
         self.layer2 = self._make_layer(block, planes*2, num_blocks[1], stride=2)
         self.layer3 = self._make_layer(block, planes*4, num_blocks[2], stride=2)
         self.layer4 = self._make_layer(block, planes*8, num_blocks[3], stride=2)
-        self.linear = nn.Linear(planes*8*block.expansion, num_classes)
+        self.linear = Linear(planes*8*block.expansion, num_classes)
 
     def _make_layer(self, block, planes, num_blocks, stride):
         strides = [stride] + [1]*(num_blocks-1)
@@ -166,8 +166,8 @@ def ResNet18():
 def ResNet34():
     return ResNet(BasicBlock, [3,4,6,3])
 
-def ResNet50(plane_multiplier, Conv2d):
-    return ResNet(Bottleneck, [3,4,6,3], Conv2d=Conv2d, plane_multiplier=plane_multiplier)
+def ResNet50(plane_multiplier, Conv2d, Linear):
+    return ResNet(Bottleneck, [3,4,6,3], Conv2d=Conv2d, Linear=Linear, plane_multiplier=plane_multiplier)
 
 def ResNet101():
     return ResNet(Bottleneck, [3,4,23,3])
@@ -177,7 +177,7 @@ def ResNet152():
 
 
 def test():
-    net = ResNet50(4,nn.Conv2d)
+    net = ResNet50(4,nn.Conv2d,nn.Linear)
     y = net(Variable(torch.randn(1,3,32,32)))
     print(y.size())
 
