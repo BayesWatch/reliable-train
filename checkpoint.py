@@ -39,7 +39,7 @@ class Checkpoint(object):
         checkpoint_loc: location to save checkpoints to.
         log_loc: location to save logs to
     """
-    def __init__(self, Model, initial_lr, lr_decay, minibatch_size,
+    def __init__(self, model, initial_lr, lr_decay, minibatch_size,
                  lr_schedule, checkpoint_loc, log_loc, verbose=False,
                  multi_gpu=False, l1_factor=0., l2_factor=5e-4, Optimizer=optim.SGD,
                  CriterionConstructor=nn.CrossEntropyLoss):
@@ -156,6 +156,7 @@ class Checkpoint(object):
             self.net = torch.nn.DataParallel(self.net, device_ids=range(torch.cuda.device_count()))
             cudnn.benchmark = True
         elif not self.multi_gpu:
+            print("setting gpu index %i"%self.gpu_index)
             self.net.cuda(self.gpu_index)
 
         # always set up criterion and optimiser

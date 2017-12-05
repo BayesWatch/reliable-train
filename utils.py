@@ -117,3 +117,19 @@ def sigterm_handler(_signo, _stack_frame):
     cmdline = " ".join(sys.argv)
     logging.info("COMMAND RECEIVED SIGTERM: %s was at line:\n"%cmdline+sigterm_trace)
     sys.exit(1)
+
+def cleanup(checkpoint_loc, log_loc):
+    are_you_sure = input("Deleting ALL EXPERIMENTS in %s, and ALL LOGS in %s is that OK? (y/n)"%(checkpoint_loc, log_loc))
+    if are_you_sure == 'y':
+        import shutil
+        def try_delete(loc):
+            try:
+                shutil.rmtree(loc)
+            except FileNotFoundError:
+                print("%s already clean, nothing to delete"%loc)
+        print("Deleting checkpoints in %s..."%checkpoint_loc)
+        try_delete(checkpoint_loc)
+        print("Deleting logs in %s..."%log_loc)
+        try_delete(log_loc)
+    else:
+        assert False
