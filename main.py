@@ -3,6 +3,7 @@ want, *it'll keep trying*).'''
 from __future__ import print_function
 
 import torch
+import torch.nn as nn
 from torch import optim
 
 import sys
@@ -131,7 +132,7 @@ def main(args):
         model = lambda: VGG(model_tag) # model constructor
     elif 'resnet' in model_tag:
         if '50' in model_tag:
-            model = lambda: ResNet50(args.model_multiplier)
+            model = lambda: ResNet50(args.model_multiplier, nn.Conv2d, nn.Linear)
     elif 'butterfly' in model_tag:
         if 'res' in model_tag:
             model = lambda: ButterflyResNet18()
