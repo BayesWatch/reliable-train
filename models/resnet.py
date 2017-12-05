@@ -15,8 +15,8 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 
 
-def conv3x3(in_planes, out_planes, stride=1):
-    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=1, bias=False)
+def conv3x3(in_planes, out_planes, Conv2d, stride=1):
+    return Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=1, bias=False)
 
 
 class BasicBlock(nn.Module):
@@ -32,7 +32,7 @@ class BasicBlock(nn.Module):
         self.shortcut = nn.Sequential()
         if stride != 1 or in_planes != self.expansion*planes:
             self.shortcut = nn.Sequential(
-                nn.Conv2d(in_planes, self.expansion*planes, kernel_size=1, stride=stride, bias=False),
+                Conv2d(in_planes, self.expansion*planes, kernel_size=1, stride=stride, bias=False),
                 nn.BatchNorm2d(self.expansion*planes)
             )
 
@@ -57,7 +57,7 @@ class PreActBlock(nn.Module):
 
         if stride != 1 or in_planes != self.expansion*planes:
             self.shortcut = nn.Sequential(
-                nn.Conv2d(in_planes, self.expansion*planes, kernel_size=1, stride=stride, bias=False)
+                Conv2d(in_planes, self.expansion*planes, kernel_size=1, stride=stride, bias=False)
             )
 
     def forward(self, x):
@@ -72,19 +72,19 @@ class PreActBlock(nn.Module):
 class Bottleneck(nn.Module):
     expansion = 4
 
-    def __init__(self, in_planes, planes, stride=1):
+    def __init__(self, in_planes, planes, Conv2d, stride=1):
         super(Bottleneck, self).__init__()
-        self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=1, bias=False)
+        self.conv1 = Conv2d(in_planes, planes, kernel_size=1, bias=False)
         self.bn1 = nn.BatchNorm2d(planes)
-        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.conv2 = Conv2d(planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
         self.bn2 = nn.BatchNorm2d(planes)
-        self.conv3 = nn.Conv2d(planes, self.expansion*planes, kernel_size=1, bias=False)
+        self.conv3 = Conv2d(planes, self.expansion*planes, kernel_size=1, bias=False)
         self.bn3 = nn.BatchNorm2d(self.expansion*planes)
 
         self.shortcut = nn.Sequential()
         if stride != 1 or in_planes != self.expansion*planes:
             self.shortcut = nn.Sequential(
-                nn.Conv2d(in_planes, self.expansion*planes, kernel_size=1, stride=stride, bias=False),
+                Conv2d(in_planes, self.expansion*planes, kernel_size=1, stride=stride, bias=False),
                 nn.BatchNorm2d(self.expansion*planes)
             )
 
@@ -104,15 +104,15 @@ class PreActBottleneck(nn.Module):
     def __init__(self, in_planes, planes, stride=1):
         super(PreActBottleneck, self).__init__()
         self.bn1 = nn.BatchNorm2d(in_planes)
-        self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=1, bias=False)
+        self.conv1 = Conv2d(in_planes, planes, kernel_size=1, bias=False)
         self.bn2 = nn.BatchNorm2d(planes)
-        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.conv2 = Conv2d(planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
         self.bn3 = nn.BatchNorm2d(planes)
-        self.conv3 = nn.Conv2d(planes, self.expansion*planes, kernel_size=1, bias=False)
+        self.conv3 = Conv2d(planes, self.expansion*planes, kernel_size=1, bias=False)
 
         if stride != 1 or in_planes != self.expansion*planes:
             self.shortcut = nn.Sequential(
-                nn.Conv2d(in_planes, self.expansion*planes, kernel_size=1, stride=stride, bias=False)
+                Conv2d(in_planes, self.expansion*planes, kernel_size=1, stride=stride, bias=False)
             )
 
     def forward(self, x):
@@ -126,12 +126,13 @@ class PreActBottleneck(nn.Module):
 
 
 class ResNet(nn.Module):
-    def __init__(self, block, num_blocks, num_classes=10, plane_multiplier=4):
+    def __init__(self, block, num_blocks, Conv2d=nn.Conv2d, num_classes=10, plane_multiplier=4):
         super(ResNet, self).__init__()
         self.in_planes = 4*2**plane_multiplier
+        self.Conv2d = Conv2d
         planes = 4*2**plane_multiplier
 
-        self.conv1 = conv3x3(3,planes)
+        self.conv1 = conv3x3(3, planes, Conv2d)
         self.bn1 = nn.BatchNorm2d(planes)
         self.layer1 = self._make_layer(block, planes, num_blocks[0], stride=1)
         self.layer2 = self._make_layer(block, planes*2, num_blocks[1], stride=2)
@@ -143,7 +144,7 @@ class ResNet(nn.Module):
         strides = [stride] + [1]*(num_blocks-1)
         layers = []
         for stride in strides:
-            layers.append(block(self.in_planes, planes, stride))
+            layers.append(block(self.in_planes, planes, self.Conv2d, stride))
             self.in_planes = planes * block.expansion
         return nn.Sequential(*layers)
 
@@ -165,8 +166,8 @@ def ResNet18():
 def ResNet34():
     return ResNet(BasicBlock, [3,4,6,3])
 
-def ResNet50(plane_multiplier):
-    return ResNet(Bottleneck, [3,4,6,3], plane_multiplier=plane_multiplier)
+def ResNet50(plane_multiplier, Conv2d):
+    return ResNet(Bottleneck, [3,4,6,3], Conv2d=Conv2d, plane_multiplier=plane_multiplier)
 
 def ResNet101():
     return ResNet(Bottleneck, [3,4,23,3])
@@ -176,8 +177,9 @@ def ResNet152():
 
 
 def test():
-    net = ResNet18()
+    net = ResNet50(4,nn.Conv2d)
     y = net(Variable(torch.randn(1,3,32,32)))
     print(y.size())
 
-# test()
+if __name__ == '__main__':
+    test()
