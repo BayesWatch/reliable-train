@@ -295,7 +295,7 @@ if __name__ == '__main__':
     args = parse()
 
     # limit GPU usage
-    os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
 
     # initialise logging
     model_tag = format_model_tag(args.model, args.model_multiplier, args.l1, args.l2, args.deep_compression)
