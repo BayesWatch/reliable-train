@@ -134,17 +134,17 @@ def main(args):
     # complicated way to initialise the Checkpoint object that'll hold our
     # model
     if 'VGG' in model_tag:
-        model = lambda: VGG(model_tag) # model constructor
+        model = VGG(model_tag) # model constructor
     elif 'resnet' in model_tag:
         if '50' in model_tag:
-            model = lambda: ResNet50(args.model_multiplier, nn.Conv2d, nn.Linear)
+            model = ResNet50(args.model_multiplier, nn.Conv2d, nn.Linear)
     elif 'butterfly' in model_tag:
         if 'res' in model_tag:
-            model = lambda: ButterflyResNet18()
+            model = ButterflyResNet18()
         else:
-            model = lambda: ButterflyNet()
+            model = ButterflyNet()
     elif 'mobilenet' in model_tag:
-        model = lambda: MobileNet()
+        model = MobileNet()
 
     # choose model from args
     if args.deep_compression:

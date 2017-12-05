@@ -39,7 +39,7 @@ class Checkpoint(object):
         checkpoint_loc: location to save checkpoints to.
         log_loc: location to save logs to
     """
-    def __init__(self, model, initial_lr, lr_decay, minibatch_size,
+    def __init__(self, Model, initial_lr, lr_decay, minibatch_size,
                  lr_schedule, checkpoint_loc, log_loc, verbose=False,
                  multi_gpu=False, l1_factor=0., l2_factor=5e-4, Optimizer=optim.SGD,
                  CriterionConstructor=nn.CrossEntropyLoss):
@@ -88,7 +88,7 @@ class Checkpoint(object):
             self.most_recent_saved = self.best_saved
         elif self.best_saved.get('not_found', False):
             # initialise network
-            self.net = model()            
+            self.net = model
 
             # save initialised checkpoint
             save_path = self.save(0.0, 100.0, 0)
