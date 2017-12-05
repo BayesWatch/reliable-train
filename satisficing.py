@@ -16,7 +16,7 @@ from torch.autograd import Variable
 
 import numpy as np
 
-from utils import ProgressBar, format_l2
+from utils import ProgressBar, format_l2, sigterm_handler
 from checkpoint import Checkpoint, format_settings_str, sparsity
 from data import cifar10
 from seppuku import exit_after
@@ -27,15 +27,9 @@ from glob import glob
 
 from sklearn.ensemble import ExtraTreesRegressor
 
-import traceback
 import signal
 
 # if we receive SIGTERM, we want to log what we were doing when that happened
-def sigterm_handler(_signo, _stack_frame):
-    sigterm_trace = "    ".join(traceback.format_stack()[:-1])
-    cmdline = " ".join(sys.argv)
-    logging.info("COMMAND RECEIVED SIGTERM: %s was at line:\n"%cmdline+sigterm_trace)
-    sys.exit(1)
 signal.signal(signal.SIGTERM, sigterm_handler)
 
 def parse(to_parse=None):

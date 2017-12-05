@@ -17,11 +17,16 @@ from torch.autograd import Variable
 
 import numpy as np
 
-from utils import ProgressBar, format_l1, format_l2
+from utils import ProgressBar, format_l1, format_l2, sigterm_handler
 from checkpoint import Checkpoint, format_settings_str
 from data import cifar10
 
 from itertools import combinations
+
+import signal
+
+# if we receive SIGTERM, we want to log what we were doing when that happened
+signal.signal(signal.SIGTERM, sigterm_handler)
 
 def parse(to_parse=None):
     parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training\nlearning rate will decay every 60 epochs')

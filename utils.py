@@ -8,6 +8,7 @@ import sys
 import time
 import math
 import re
+import traceback
 
 import torch
 import torch.nn as nn
@@ -110,3 +111,9 @@ def format_l1(l1):
 
 def format_l2(l1):
     return (".l2_%.01E"%l1).lower().replace("0", "")
+
+def sigterm_handler(_signo, _stack_frame):
+    sigterm_trace = "    ".join(traceback.format_stack()[:-1])
+    cmdline = " ".join(sys.argv)
+    logging.info("COMMAND RECEIVED SIGTERM: %s was at line:\n"%cmdline+sigterm_trace)
+    sys.exit(1)
