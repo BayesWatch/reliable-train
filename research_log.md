@@ -134,3 +134,13 @@ Interesting to note that immediately after setting all values less than
 0.02 to zero there is a short period where sparsifification increases. Some
 more parameters have to go to zero for the network to reconfigure itself
 to get its recent performance back.
+
+5th December 2017
+-----------------
+
+Running deep compression with default settings for each of the three
+architectures I've decided on to check for sanity. Running the following:
+
+* `python main.py 0.1_0.1_128 --model resnet50 -v --gpu 2 --deep_compression`
+* `python main.py 0.1_0.1_128 --model VGG16 -v --gpu 1 --deep_compression`
+* `python main.py 0.1_0.1_128 --model mobilenet -v --gpu 1  --deep_compression`
