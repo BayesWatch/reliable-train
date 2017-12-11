@@ -86,3 +86,7 @@ perspective of the sparsity measuring function. We kind of have to know
 what the sparsity might be, so we need to implement something new to track
 sparsity in just these experiments. May be worth using the functions
 already developed in the Bayesian Compression Tutorial.
+
+Still hitting NaNs, even with the variance limits, will have to do a more
+in-depth search to figure out exactly what's causing them. Probably not
+enough time to do that today.
