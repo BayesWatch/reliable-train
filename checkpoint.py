@@ -156,7 +156,6 @@ class Checkpoint(object):
             self.net = torch.nn.DataParallel(self.net, device_ids=range(torch.cuda.device_count()))
             cudnn.benchmark = True
         elif not self.multi_gpu:
-            print("setting gpu index %i"%self.gpu_index)
             self.net.cuda(self.gpu_index)
 
         # always set up criterion and optimiser
