@@ -17,7 +17,7 @@ from torch.autograd import Variable
 
 import numpy as np
 
-from utils import ProgressBar, format_l1, format_l2, sigterm_handler
+from utils import ProgressBar, format_l1, format_l2, sigterm_handler, standard_schedule, sgdr
 from checkpoint import Checkpoint, format_settings_str
 from data import cifar10
 
@@ -46,7 +46,7 @@ def parse(to_parse=None):
     parser.add_argument('--evaluate', action='store_true', help='run on test set')
     parser.add_argument('--deep_compression', action='store_true', help='use deep compression to sparsify')
     parser.add_argument('--clean', action='store_true', help='Whether to start from clean (WILL DELETE OLD FILES).')
-    #parser.add_argument('--sgdr', action='store_true', help='use the SGDR learning rate schedule')
+    parser.add_argument('--sgdr', action='store_true', help='use the SGDR learning rate schedule')
     args = parser.parse_args(to_parse)
     return args
 
@@ -55,7 +55,7 @@ def run_identity(argv):
     argv = ["dummy_config"] + argv # have to supply something or hit an error
     args = parse(argv)
     myhost = os.uname()[1].split(".")[0] + "."
-    return myhost + format_model_tag(args.model, args.model_multiplier, args.l1, args.l2, args.deep_compression)
+    return myhost + format_model_tag(args.model, args.model_multiplier, args.l1, args.l2, args.deep_compression, args.sgdr)
 
 def get_random_config_id(rng):
     learning_rate = np.exp(rng.uniform(low=np.log(0.01), high=np.log(0.4)))
@@ -68,13 +68,15 @@ def get_config(config_id):
     config = config_id.split("_")
     return float(config[0]), float(config[1]), int(config[2])
 
-def format_model_tag(model, model_multiplier, l1, l2, deep_compression):
+def format_model_tag(model, model_multiplier, l1, l2, deep_compression, sgdr):
     if 'resnet' in model:
         model_tag = model+".%02d"%model_multiplier+format_l1(l1)+format_l2(l2)
     else:
         model_tag = model
     if deep_compression:
         model_tag += '.dc'
+    if sgdr:
+        model_tag += '.sgdr'
     return model_tag
 
 def main(args):
@@ -93,7 +95,7 @@ def main(args):
     trainloader, valloader, testloader = cifar10(args.scratch, minibatch, verbose=args.v)
 
     # Set where to save and load checkpoints, use model_tag for directory name
-    model_tag = format_model_tag(args.model, args.model_multiplier, args.l1, args.l2, args.deep_compression)
+    model_tag = format_model_tag(args.model, args.model_multiplier, args.l1, args.l2, args.deep_compression, args.sgdr)
 
     checkpoint_loc = os.path.join(args.scratch, 'checkpoint', model_tag)
     # Set where to append tensorboard logs
@@ -125,11 +127,12 @@ def main(args):
 
     # define learning rate schedule and make it the default
     # generalised so it would work with any schedule definable with mbatch index
-    def standard_schedule(decay_ratio, period, batch_idx):
-        # returns multiplier for current batch according to the standard two step schedule
-        batch_idx, period = float(batch_idx), float(period)
-        return decay_ratio**math.floor(batch_idx/period)
-    schedule = standard_schedule
+    if args.sgdr:
+        schedule = sgdr
+        lr_period = 10
+    else:
+        schedule = standard_schedule
+        lr_period = 60
 
     # complicated way to initialise the Checkpoint object that'll hold our
     # model
@@ -151,7 +154,7 @@ def main(args):
     checkpoint = Checkpoint(model, lr, lr_decay, minibatch,
             schedule, checkpoint_loc, log_loc, verbose=args.v,
             multi_gpu=args.multi_gpu, l1_factor=args.l1, l2_factor=args.l2,
-            Optimizer=Optimizer)
+            Optimizer=Optimizer, lr_period=lr_period)
 
     def train(checkpoint, trainloader):
         checkpoint.init_for_epoch(gpu_index, should_update=True, epoch_size=len(trainloader))
@@ -206,7 +209,7 @@ if __name__ == '__main__':
     args = parse()
 
     # initialise logging
-    model_tag = format_model_tag(args.model, args.model_multiplier, args.l1, args.l2, args.deep_compression)
+    model_tag = format_model_tag(args.model, args.model_multiplier, args.l1, args.l2, args.deep_compression, args.sgdr)
     if args.deep_compression:
         model_tag += '.dc'
     logging_loc = os.path.join(args.scratch, 'checkpoint', model_tag, 'errors.log')

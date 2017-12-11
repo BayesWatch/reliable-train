@@ -42,13 +42,14 @@ class Checkpoint(object):
     def __init__(self, model, initial_lr, lr_decay, minibatch_size,
                  lr_schedule, checkpoint_loc, log_loc, verbose=False,
                  multi_gpu=False, l1_factor=0., l2_factor=5e-4, Optimizer=optim.SGD,
-                 CriterionConstructor=nn.CrossEntropyLoss):
+                 CriterionConstructor=nn.CrossEntropyLoss, lr_period=60.):
         self.Optimizer = Optimizer
         self.v = verbose
         self.multi_gpu = multi_gpu
         self.l1_factor = l1_factor
         self.l2_factor = l2_factor
         self.CriterionConstructor = CriterionConstructor
+        self.lr_period = lr_period
         # check cuda availability
         self.use_cuda = torch.cuda.is_available()
 
@@ -169,7 +170,7 @@ class Checkpoint(object):
 
             # set up learning rate callback
             current_batch = epoch_size * self.epoch
-            period = 60*epoch_size
+            period = self.lr_period*epoch_size
             self.lr_schedule_callback = lambda x: self.initial_lr*self.lr_schedule(x+current_batch, period)
 
             self.epoch_size = epoch_size
