@@ -135,6 +135,7 @@ Interesting to note that immediately after setting all values less than
 more parameters have to go to zero for the network to reconfigure itself
 to get its recent performance back.
 
+
 5th December 2017
 -----------------
 
@@ -144,3 +145,66 @@ architectures I've decided on to check for sanity. Running the following:
 * `python main.py 0.1_0.1_128 --model resnet50 -v --gpu 2 --deep_compression`
 * `python main.py 0.1_0.1_128 --model VGG16 -v --gpu 1 --deep_compression`
 * `python main.py 0.1_0.1_128 --model mobilenet -v --gpu 1  --deep_compression`
+
+6th December 2017
+-----------------
+
+With the default settings described yesterday, ended up with the following
+results training with deep compression using the standard threshold of
+0.02.
+
+### VGG16
+
+The final sparsity value recorded was 0.016 (1.6% of parameters active). We
+can clearly see the thresholding operation happening in the sparsity trace:
+
+![](images/vgg16_sparsity.png)
+
+At the same time, the final validation accuracy was 91.8%:
+
+![](images/vgg16_lossacc.png)
+
+In the final iterations, despite the pruning, the loss was still able to
+go close to zero:
+
+![](images/vgg16_trainloss.png)
+
+### ResNet50
+
+The final sparsity in this model is ridiculous, finishing up at 5e-3:
+
+![](images/resnet50_sparsity.png)
+
+But, we are taking an accuracy hit here. Before sparsifying, this model was
+able to get a validation accuracy of 93.6%. Now it finishes at 92.3%:
+
+![](images/resnet50_acc.png)
+
+Maybe due to the high sparsity, the final training loss doesn't get quite
+as close to zero:
+
+![](images/resnet50_trainloss.png)
+
+### MobileNet
+
+This model should tolerate less sparsity, as the architecture is already
+tuned to reduce parameter usage (VGG16 is certainly not). I don't know what
+the baseline is for this model on CIFAR-10, so pending a run without deep
+compression for comparison (running now, the above command without
+`---deep_compression`).
+
+However, the model actually sparsifies quite heavily only under weight
+decay, and the final sparsity is competitive with VGG16, at 0.017:
+
+![](images/mobilenet_sparsity.png)
+
+The final accuracy is much worse than the other two models, at 89%. It
+looks like it doesn't really converge:
+
+![](images/mobilenet_lossacc.png)
+
+On the training set it isn't able to get anywhere near zero:
+
+![](images/mobilenet_trainloss.png)
+
+Still, impressive that it's able to operate with so few active parameters.
