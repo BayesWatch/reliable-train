@@ -133,3 +133,23 @@ def cleanup(checkpoint_loc, log_loc):
         try_delete(log_loc)
     else:
         assert False
+
+def sgdr(decay_ratio, period, batch_idx):
+    # returns normalised anytime sgdr schedule given period and batch_idx
+    # best performing settings reported in paper are T_0 = 10, T_mult=2
+    # so always use T_mult=2
+    # I'm sorry decay_ratio is never used, I'm just hacking this thing together
+    batch_idx = float(batch_idx)
+    restart_period = period
+    while batch_idx/restart_period > 1.:
+        batch_idx = batch_idx - restart_period
+        restart_period = restart_period * 2.
+
+    radians = math.pi*(batch_idx/restart_period)
+    return 0.5*(1.0 + math.cos(radians))
+
+def standard_schedule(decay_ratio, period, batch_idx):
+    # returns multiplier for current batch according to the standard two step schedule
+    batch_idx, period = float(batch_idx), float(period)
+    return decay_ratio**math.floor(batch_idx/period)
+

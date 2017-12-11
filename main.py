@@ -72,7 +72,7 @@ def format_model_tag(model, model_multiplier, l1, l2, deep_compression, sgdr):
     if 'resnet' in model:
         model_tag = model+".%02d"%model_multiplier+format_l1(l1)+format_l2(l2)
     else:
-        model_tag = model
+        model_tag = model+format_l1(l1)+format_l2(l2)
     if deep_compression:
         model_tag += '.dc'
     if sgdr:
