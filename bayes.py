@@ -50,6 +50,47 @@ def parse(to_parse=None):
     args = parser.parse_args(to_parse)
     return args
 
+# build a simple MLP
+class Net(nn.Module):
+    def __init__(self):
+        super(Net, self).__init__()
+        # activation
+        self.relu = nn.ReLU()
+        # layers
+        self.fc1 = LinearGroupNJ(32 * 32, 300, clip_var=0.04)
+        self.fc2 = LinearGroupNJ(300, 100)
+        self.fc3 = LinearGroupNJ(100, 10)
+        # layers including kl_divergence
+        self.kl_list = [self.fc1, self.fc2, self.fc3]
+
+    def forward(self, x):
+        x = x.mean(1)
+        x = x.view(-1, 32 * 32)
+        x = self.relu(self.fc1(x))
+        x = self.relu(self.fc2(x))
+        return self.fc3(x)
+
+    def get_masks(self,thresholds):
+        weight_masks = []
+        mask = None
+        for i, (layer, threshold) in enumerate(zip(self.kl_list, thresholds)):
+            # compute dropout mask
+            if mask is None:
+                log_alpha = layer.get_log_dropout_rates().cpu().data.numpy()
+                mask = log_alpha < threshold
+            else:
+                mask = np.copy(next_mask)
+            try:
+                log_alpha = layers[i + 1].get_log_dropout_rates().cpu().data.numpy()
+                next_mask = log_alpha < thresholds[i + 1]
+            except:
+                # must be the last mask
+                next_mask = np.ones(10)
+
+            weight_mask = np.expand_dims(mask, axis=0) * np.expand_dims(next_mask, axis=1)
+            weight_masks.append(weight_mask.astype(np.float))
+        return weight_masks
+
 # define run_identity for hyperband
 def run_identity(argv):
     argv = ["dummy_config"] + argv # have to supply something or hit an error
@@ -84,6 +125,14 @@ def kl_divergence(model):
         if hasattr(m, 'kl_divergence'):
             KLD += m.kl_divergence()
     return KLD
+
+def clip_variances(model):
+    """Parses model for layers with a clip_variances method and runs
+    them"""
+    for m in model.modules():
+        # recursive walk through all modules
+        if hasattr(m, 'clip_variances'):
+            m.clip_variances()
 
 def main(args):
     if args.v:
@@ -128,10 +177,13 @@ def main(args):
         return decay_ratio**math.floor(batch_idx/period)
     schedule = standard_schedule
 
+
     # complicated way to initialise the Checkpoint object that'll hold our
     # model
     if 'VGG' in model_tag:
-        model = VGG(model_tag, Conv2d=Conv2dGroupNJ, Linear=LinearGroupNJ) # model constructor
+        # VGG16 is the only supported option
+        model = VGG('VGG16', Conv2d=Conv2dGroupNJ, Linear=LinearGroupNJ) # model constructor
+        #model = Net()
     elif 'resnet' in model_tag:
         if '50' in model_tag:
             model = ResNet50(args.model_multiplier, Conv2dGroupNJ, LinearGroupNJ)
@@ -144,7 +196,7 @@ def main(args):
         """Variationally regularised cross-entropy."""
         def __init__(self):
             self.model = model
-            self.N = float(len(trainloader))
+            self.N = float(len(trainloader)*trainloader.batch_size)
         def __call__(self, outputs, targets):
             kl = kl_divergence(model)
             discrimination_error = discrimination_loss(outputs, targets)
@@ -165,6 +217,7 @@ def main(args):
         for inputs, targets in trainloader:
             batch_idx += 1
             loss = checkpoint.propagate(inputs, targets, batch_idx, should_update=True)
+            clip_variances(checkpoint.net)
             train_loss += loss
 
             if args.v:
@@ -202,17 +255,6 @@ def main(args):
             # log loss and sparsity to a file
             sp = sparsity(checkpoint.net if not isinstance(checkpoint.net,
                                     torch.nn.DataParallel) else checkpoint.net.module)
-            if not os.path.exists("satisficing"):
-                os.mkdir("satisficing")
-            with open(os.path.join("satisficing",args.config_id), "a") as f:
-                f.write("%i, %.4f, %.4f\n"%(epoch,vloss,sp))
-            # save the predicted objective and objective to the tensorboard logs
-            o = objective(vloss, sp)
-            X,Y = load_satisficing_history()
-            po = model_value(epoch,args.config_id,X,Y)
-            example_idx = checkpoint.minibatch_idx*checkpoint.minibatch_size
-            checkpoint.summary_writer.add_scalar('validation/objective', o, example_idx)
-            checkpoint.summary_writer.add_scalar('validation/predicted_objective', po, example_idx)
         else:
             validation_loss = checkpoint.best_saved['loss']
             validation_acc = checkpoint.best_saved['acc']

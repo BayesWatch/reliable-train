@@ -68,7 +68,8 @@ class LinearGroupNJ(nn.Module):
     [3] Louizos, Christos, Karen Ullrich, and Max Welling. "Bayesian Compression for Deep Learning." NIPS (2017).
     """
 
-    def __init__(self, in_features, out_features, init_weight=None, init_bias=None, clip_var=None):
+    def __init__(self, in_features, out_features, init_weight=None,
+            init_bias=None, clip_var=0.5):
 
         super(LinearGroupNJ, self).__init__()
         self.in_features = in_features
@@ -187,7 +188,7 @@ class _ConvNdGroupNJ(nn.Module):
     [3] Louizos, Christos, Karen Ullrich, and Max Welling. "Bayesian Compression for Deep Learning." NIPS (2017).
     """
     def __init__(self, in_channels, out_channels, kernel_size, stride, padding, dilation, transposed, output_padding,
-                 groups, bias, init_weight, init_bias, clip_var=None):
+                 groups, bias, init_weight, init_bias, clip_var=0.5):
         super(_ConvNdGroupNJ, self).__init__()
         if in_channels % groups != 0:
             raise ValueError('in_channels must be divisible by groups')
@@ -312,7 +313,7 @@ class Conv1dGroupNJ(_ConvNdGroupNJ):
     """
 
     def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0, dilation=1, groups=1, bias=True,
-                 init_weight=None, init_bias=None, clip_var=None):
+                 init_weight=None, init_bias=None, clip_var=0.5):
         kernel_size = utils._single(kernel_size)
         stride = utils._single(stride)
         padding = utils._single(padding)
@@ -353,7 +354,7 @@ class Conv2dGroupNJ(_ConvNdGroupNJ):
     """
 
     def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0, dilation=1, groups=1, bias=True,
-                 init_weight=None, init_bias=None, clip_var=None):
+                 init_weight=None, init_bias=None, clip_var=0.5):
         kernel_size = utils._pair(kernel_size)
         stride = utils._pair(stride)
         padding = utils._pair(padding)
@@ -394,7 +395,7 @@ class Conv3dGroupNJ(_ConvNdGroupNJ):
     """
 
     def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0, dilation=1, groups=1, bias=True,
-                 init_weight=None, init_bias=None, clip_var=None):
+                 init_weight=None, init_bias=None, clip_var=0.5):
         kernel_size = utils._triple(kernel_size)
         stride = utils._triple(stride)
         padding = utils._triple(padding)
