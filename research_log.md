@@ -208,3 +208,11 @@ On the training set it isn't able to get anywhere near zero:
 ![](images/mobilenet_trainloss.png)
 
 Still, impressive that it's able to operate with so few active parameters.
+
+11th December 2017
+------------------
+
+Running the sanity experiments for L1 regularisation in the `bash`
+directory on `resnet50`, `VGG16` and `mobilenet`. Trying with an SGDR
+schedule and standard schedule. Will run overnight. Committing scripts with
+this research log entry.
