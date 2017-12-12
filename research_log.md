@@ -216,3 +216,11 @@ Running the sanity experiments for L1 regularisation in the `bash`
 directory on `resnet50`, `VGG16` and `mobilenet`. Trying with an SGDR
 schedule and standard schedule. Will run overnight. Committing scripts with
 this research log entry.
+
+12th December 2017
+------------------
+
+*Initial note*: in the L1 experiments it looks like tuning of the L2
+regularisation is necessary. When we have set a low L1 coefficient, the
+network overfits:
+
