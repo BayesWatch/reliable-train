@@ -224,3 +224,19 @@ this research log entry.
 regularisation is necessary. When we have set a low L1 coefficient, the
 network overfits:
 
+![](images/mobilenet_overfit.png)
+
+Quite a few of the experiments failed to run. Looks like the VGG16
+experiments failed on both machines, but I didn't see anything about it in
+the logs. Looks like they just didn't save anything, don't know why.
+
+And we're missing ResNet50 l1:1e-6 with SGDR on wolfburn.
+
+So, these results aren't really representative, with the overfitting.
+Still, recorded them in the spreadsheet, and here is an example Pareto
+Curve for MobileNet:
+
+![](images/example_pareto.png)
+
+Will have to repeat this experiment but use a reasonable amount of L2
+regularisation with the L1 regularisation.
