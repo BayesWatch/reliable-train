@@ -90,3 +90,10 @@ already developed in the Bayesian Compression Tutorial.
 Still hitting NaNs, even with the variance limits, will have to do a more
 in-depth search to figure out exactly what's causing them. Probably not
 enough time to do that today.
+
+12th December 2017
+------------------
+
+Satisficing experiment I was running in `satisficing.py` appears to have
+issues. Specifically, the predicted objective and actual objective appear
+to be precisely the same value. Making an issue for this.
