@@ -243,3 +243,17 @@ regularisation with the L1 regularisation.
 
 Started an experiment running a range of values with an exact sparsity
 target on the three networks.
+
+13th December 2017
+------------------
+
+Experiments didn't run because they all saved to the same checkpoint
+location; ie the first experiment ran, then the others just loaded and
+reported the results of that one because they thought that was their
+checkpoint. Should have ensured the value of the deep compression sparsity
+goal was stored in the model tag, and therefore in the checkpoint and log
+location.
+
+ExactSparsity appears to have to have worked as expected, although the
+MobileNet has overfit. Each of the models sparsified has ended up with just
+under the goal of 5% sparsity.

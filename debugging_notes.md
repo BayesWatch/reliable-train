@@ -90,3 +90,10 @@ already developed in the Bayesian Compression Tutorial.
 Still hitting NaNs, even with the variance limits, will have to do a more
 in-depth search to figure out exactly what's causing them. Probably not
 enough time to do that today.
+
+13th December 2017
+------------------
+
+Added code to detect NaNs, so I can at least see at what point they are
+occurring. Probably not enough to figure out what's going wrong, but can
+open a debugging or pickle the state when it happens to investigate next.

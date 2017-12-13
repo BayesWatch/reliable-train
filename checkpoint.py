@@ -16,6 +16,12 @@ from torch.autograd import Variable
 
 import numpy as np
 
+def isnt_nan(t):
+    # funny that this is the only way I could find to do this
+    # https://discuss.pytorch.org/t/how-to-set-nan-in-tensor-to-0/3918/5
+    if (t.data != t.data).sum() > 0:
+        raise ValueError("NaN entries in tensor: %s"%str(t.data))
+
 class Checkpoint(object):
     """
     Takes a set of hyperparameter settings, looks for existing checkpoints with
@@ -218,6 +224,10 @@ class Checkpoint(object):
                         torch.nn.DataParallel) else self.net.module.parameters():
                     reg_loss += self.l1_factor*l1_loss(param)
                 reg_loss.backward()
+            # check for NaNs in the grads
+            for param in self.net.parameters() if not isinstance(self.net,
+                    torch.nn.DataParallel) else self.net.module.parameters():
+                isnt_nan(param.grad)
             self.optimizer.step()
             self.minibatch_idx += 1
 
@@ -236,7 +246,7 @@ class Checkpoint(object):
             net_sparsity = sparsity(self.net if not isinstance(self.net,
                                     torch.nn.DataParallel) else self.net.module)
             self.summary_writer.add_scalar('train/sparsity', net_sparsity, example_idx)
-            # if we've reached a high enough batch then sparsify
+            # if we've reached a high enough batch then sparsify (if the optimizer can)
             if hasattr(self.optimizer, 'sparsify'):
                 self.sparsify(batch_index)
 
