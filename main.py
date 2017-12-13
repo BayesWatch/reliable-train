@@ -44,7 +44,7 @@ def parse(to_parse=None):
     parser.add_argument('--model_multiplier', default=4, type=int, help='multiplier for number of planes in model')
     parser.add_argument('-v', action='store_true', help='verbose with progress bar')
     parser.add_argument('--evaluate', action='store_true', help='run on test set')
-    parser.add_argument('--deep_compression', action='store_true', help='use deep compression to sparsify')
+    parser.add_argument('--deep_compression', default=1.0, type=float, help='prescribed sparsity to implement with pruning')
     parser.add_argument('--clean', action='store_true', help='Whether to start from clean (WILL DELETE OLD FILES).')
     parser.add_argument('--sgdr', action='store_true', help='use the SGDR learning rate schedule')
     args = parser.parse_args(to_parse)
@@ -55,7 +55,8 @@ def run_identity(argv):
     argv = ["dummy_config"] + argv # have to supply something or hit an error
     args = parse(argv)
     myhost = os.uname()[1].split(".")[0] + "."
-    return myhost + format_model_tag(args.model, args.model_multiplier, args.l1, args.l2, args.deep_compression, args.sgdr)
+    use_dc = args.deep_compression < 0.99
+    return myhost + format_model_tag(args.model, args.model_multiplier, args.l1, args.l2, use_dc, args.sgdr)
 
 def get_random_config_id(rng):
     learning_rate = np.exp(rng.uniform(low=np.log(0.01), high=np.log(0.4)))
@@ -95,7 +96,8 @@ def main(args):
     trainloader, valloader, testloader = cifar10(args.scratch, minibatch, verbose=args.v)
 
     # Set where to save and load checkpoints, use model_tag for directory name
-    model_tag = format_model_tag(args.model, args.model_multiplier, args.l1, args.l2, args.deep_compression, args.sgdr)
+    use_dc = args.deep_compression < 0.99
+    model_tag = format_model_tag(args.model, args.model_multiplier, args.l1, args.l2, use_dc, args.sgdr)
 
     checkpoint_loc = os.path.join(args.scratch, 'checkpoint', model_tag)
     # Set where to append tensorboard logs
@@ -145,9 +147,11 @@ def main(args):
         model = MobileNet()
 
     # choose model from args
-    if args.deep_compression:
-        from deep_compression import MaskedSGD
-        Optimizer = MaskedSGD
+    if use_dc:
+        from deep_compression import ExactSparsity
+        def get_optimizer(parameters, **kwargs):
+            return ExactSparsity(parameters, args.deep_compression, **kwargs)
+        Optimizer = get_optimizer
     else:
         Optimizer = optim.SGD
 
@@ -209,8 +213,9 @@ if __name__ == '__main__':
     args = parse()
 
     # initialise logging
-    model_tag = format_model_tag(args.model, args.model_multiplier, args.l1, args.l2, args.deep_compression, args.sgdr)
-    if args.deep_compression:
+    use_dc = args.deep_compression < 0.99
+    model_tag = format_model_tag(args.model, args.model_multiplier, args.l1, args.l2, use_dc, args.sgdr)
+    if use_dc:
         model_tag += '.dc'
     logging_loc = os.path.join(args.scratch, 'checkpoint', model_tag, 'errors.log')
     if not os.path.isdir(os.path.dirname(logging_loc)):

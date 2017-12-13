@@ -240,3 +240,6 @@ Curve for MobileNet:
 
 Will have to repeat this experiment but use a reasonable amount of L2
 regularisation with the L1 regularisation.
+
+Started an experiment running a range of values with an exact sparsity
+target on the three networks.
