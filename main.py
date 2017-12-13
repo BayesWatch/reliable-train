@@ -55,8 +55,7 @@ def run_identity(argv):
     argv = ["dummy_config"] + argv # have to supply something or hit an error
     args = parse(argv)
     myhost = os.uname()[1].split(".")[0] + "."
-    use_dc = args.deep_compression < 0.99
-    return myhost + format_model_tag(args.model, args.model_multiplier, args.l1, args.l2, use_dc, args.sgdr)
+    return myhost + format_model_tag(args.model, args.model_multiplier, args.l1, args.l2, args.deep_compression, args.sgdr)
 
 def get_random_config_id(rng):
     learning_rate = np.exp(rng.uniform(low=np.log(0.01), high=np.log(0.4)))
@@ -74,8 +73,8 @@ def format_model_tag(model, model_multiplier, l1, l2, deep_compression, sgdr):
         model_tag = model+".%02d"%model_multiplier+format_l1(l1)+format_l2(l2)
     else:
         model_tag = model+format_l1(l1)+format_l2(l2)
-    if deep_compression:
-        model_tag += '.dc'
+    if deep_compression < 0.99:
+        model_tag += '.dc_%04.2f'%deep_compression
     if sgdr:
         model_tag += '.sgdr'
     return model_tag
@@ -96,8 +95,9 @@ def main(args):
     trainloader, valloader, testloader = cifar10(args.scratch, minibatch, verbose=args.v)
 
     # Set where to save and load checkpoints, use model_tag for directory name
-    use_dc = args.deep_compression < 0.99
-    model_tag = format_model_tag(args.model, args.model_multiplier, args.l1, args.l2, use_dc, args.sgdr)
+    model_tag = format_model_tag(args.model, args.model_multiplier, args.l1, args.l2, args.deep_compression, args.sgdr)
+    print(model_tag)
+    assert False
 
     checkpoint_loc = os.path.join(args.scratch, 'checkpoint', model_tag)
     # Set where to append tensorboard logs
@@ -213,8 +213,7 @@ if __name__ == '__main__':
     args = parse()
 
     # initialise logging
-    use_dc = args.deep_compression < 0.99
-    model_tag = format_model_tag(args.model, args.model_multiplier, args.l1, args.l2, use_dc, args.sgdr)
+    model_tag = format_model_tag(args.model, args.model_multiplier, args.l1, args.l2, args.deep_compression, args.sgdr)
     if use_dc:
         model_tag += '.dc'
     logging_loc = os.path.join(args.scratch, 'checkpoint', model_tag, 'errors.log')

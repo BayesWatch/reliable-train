@@ -257,3 +257,5 @@ location.
 ExactSparsity appears to have to have worked as expected, although the
 MobileNet has overfit. Each of the models sparsified has ended up with just
 under the goal of 5% sparsity.
+
+Restarting experiments with the model tagging fixed.
