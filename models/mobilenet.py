@@ -58,5 +58,12 @@ def test():
     x = torch.randn(1,3,32,32)
     y = net(Variable(x))
     print(y.size())
+    # count no. of params in model
+    from functools import reduce
+    total = 0
+    for p in net.parameters():
+        total += reduce(lambda a,b: a*b, p.size())
+    print("Model contains %i parameters"%total)
 
-# test()
+if __name__ == '__main__':
+    test()

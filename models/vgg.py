@@ -43,6 +43,13 @@ class VGG(nn.Module):
         return nn.Sequential(*layers), in_channels
 
 if __name__ == '__main__':
-    net = VGG('VGG11')
+    net = VGG('VGG16')
     x = torch.randn(2,3,32,32)
     print(net(Variable(x)).size())
+    # count no. of params in model
+    from functools import reduce
+    total = 0
+    for p in net.parameters():
+        total += reduce(lambda a,b: a*b, p.size())
+    print("Model contains %i parameters"%total)
+

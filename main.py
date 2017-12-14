@@ -74,7 +74,7 @@ def format_model_tag(model, model_multiplier, l1, l2, deep_compression, sgdr):
     else:
         model_tag = model+format_l1(l1)+format_l2(l2)
     if deep_compression < 0.99:
-        model_tag += '.dc_%04.2f'%deep_compression
+        model_tag += '.dc_%05.3f'%deep_compression
     if sgdr:
         model_tag += '.sgdr'
     return model_tag
@@ -96,8 +96,8 @@ def main(args):
 
     # Set where to save and load checkpoints, use model_tag for directory name
     model_tag = format_model_tag(args.model, args.model_multiplier, args.l1, args.l2, args.deep_compression, args.sgdr)
-    print(model_tag)
-    assert False
+    if args.v:
+        print(model_tag)
 
     checkpoint_loc = os.path.join(args.scratch, 'checkpoint', model_tag)
     # Set where to append tensorboard logs
@@ -147,7 +147,7 @@ def main(args):
         model = MobileNet()
 
     # choose model from args
-    if use_dc:
+    if args.deep_compression < 0.99:
         from deep_compression import ExactSparsity
         def get_optimizer(parameters, **kwargs):
             return ExactSparsity(parameters, args.deep_compression, **kwargs)
@@ -214,8 +214,6 @@ if __name__ == '__main__':
 
     # initialise logging
     model_tag = format_model_tag(args.model, args.model_multiplier, args.l1, args.l2, args.deep_compression, args.sgdr)
-    if use_dc:
-        model_tag += '.dc'
     logging_loc = os.path.join(args.scratch, 'checkpoint', model_tag, 'errors.log')
     if not os.path.isdir(os.path.dirname(logging_loc)):
         os.makedirs(os.path.dirname(logging_loc))
