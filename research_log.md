@@ -259,3 +259,25 @@ MobileNet has overfit. Each of the models sparsified has ended up with just
 under the goal of 5% sparsity.
 
 Restarting experiments with the model tagging fixed.
+
+14th December 2017
+------------------
+
+Deep Compression results show that the model architecture does affect the
+level of sparsity it can deal with. ResNet50 and VGG16 can both tolerate
+sparsity down to 0.5% of parameters active and still train back to with 2%
+of the original accuracy. However, any further and training completely
+breaks down; it becomes impossible to continue training after
+sparsification, and the network loss tends to 2.3.
+
+![](dc_trends.png)
+
+Seems like the models with more parameters overall can stand to lose more;
+as you might expect. The resnet50 was the only model able to continue
+learning at all after all but 0.1% of the parameters had been set to zero.
+It ended up with 60% accuracy, which is pretty bad, but didn't completely
+fall apart.
+
+It may be interesting to see if there is indeed some phase change point
+where the network will no longer be able to learn after sparsification
+occurs when training with deep compression.
