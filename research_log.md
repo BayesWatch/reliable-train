@@ -270,7 +270,7 @@ of the original accuracy. However, any further and training completely
 breaks down; it becomes impossible to continue training after
 sparsification, and the network loss tends to 2.3.
 
-![](dc_trends.png)
+![](images/dc_trends.png)
 
 Seems like the models with more parameters overall can stand to lose more;
 as you might expect. The resnet50 was the only model able to continue
