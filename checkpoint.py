@@ -22,6 +22,13 @@ def isnt_nan(t):
     if (t.data != t.data).sum() > 0:
         raise ValueError("NaN entries in tensor: %s"%str(t.data))
 
+def clip_grads(model, clip=0.2):
+    for p in model.parameters():
+        p.grad.data.clamp_(-clip, clip)
+
+def DefaultOptimizer(parameters):
+    return optim.SGD(parameters, lr=0.1, momentum=0.9, l2=5e-4)
+
 class Checkpoint(object):
     """
     Takes a set of hyperparameter settings, looks for existing checkpoints with
@@ -43,21 +50,24 @@ class Checkpoint(object):
         lr_schedule: a function defining the learning rate schedule, itself
             taking (period, batch_index) as arguments.
         checkpoint_loc: location to save checkpoints to.
-        log_loc: location to save logs to
+        log_loc: location to save logs to.
+        optimizer: optimizer to use with this model.
     """
     def __init__(self, model, initial_lr, lr_decay, minibatch_size,
-                 lr_schedule, checkpoint_loc, log_loc, verbose=False,
-                 multi_gpu=False, l1_factor=0., l2_factor=5e-4, Optimizer=optim.SGD,
-                 CriterionConstructor=nn.CrossEntropyLoss, lr_period=60.):
-        self.Optimizer = Optimizer
+            lr_schedule, checkpoint_loc, log_loc, optimizer, verbose=False,
+            multi_gpu=False, l1_factor=0., l2_factor=None,
+            CriterionConstructor=nn.CrossEntropyLoss, lr_period=60.,
+            clip_grads_at=None):
+        self.optimizer = optimizer
         self.v = verbose
         self.multi_gpu = multi_gpu
         self.l1_factor = l1_factor
-        self.l2_factor = l2_factor
         self.CriterionConstructor = CriterionConstructor
         self.lr_period = lr_period
         # check cuda availability
         self.use_cuda = torch.cuda.is_available()
+        # if we get a value for the gradient clipping, use it
+        self.clip_grads_at = clip_grads_at
 
         # store settings
         self.initial_lr = float(initial_lr)
@@ -106,6 +116,7 @@ class Checkpoint(object):
     def save(self, acc, loss, epoch):
         state = {
             'net': self.net,
+            'optimizer_state': self.optimizer.state_dict(),
             'acc': acc,
             'loss': loss,
             'epoch': epoch}
@@ -133,11 +144,7 @@ class Checkpoint(object):
         if clean:
             # remove the old one if it's not the best
             if old_abspath != self.best_saved['abspath']:
-                try:
-                    os.remove(old_abspath)
-                except:
-                    import pdb
-                    pdb.set_trace()
+                os.remove(old_abspath)
 
         if log:
             example_idx = self.minibatch_idx*self.minibatch_size
@@ -149,6 +156,8 @@ class Checkpoint(object):
         if self.v:
             print("Loading from %s"%self.most_recent_saved['abspath'])
         state = torch.load(self.most_recent_saved['abspath'])
+        opt_state = state['optimizer_state']
+        self.optimizer.load_state_dict(opt_state)
         return state['net'], state['acc'], state['loss'], state['epoch']
 
     def init_for_epoch(self, gpu_index, should_update, epoch_size=None):
@@ -165,9 +174,8 @@ class Checkpoint(object):
         elif not self.multi_gpu:
             self.net.cuda(self.gpu_index)
 
-        # always set up criterion and optimiser
+        # always set up criterion
         self.criterion = self.CriterionConstructor()
-        self.optimizer = self.Optimizer(self.net.parameters(), lr=0.1, momentum=0.9, weight_decay=self.l2_factor)
         self.correct, self.total, self.accum_loss = 0, 0, []
 
         if should_update:
@@ -218,6 +226,8 @@ class Checkpoint(object):
 
         if should_update:
             loss.backward()
+            if self.clip_grads_at is not None:
+                clip_grads(self.net, clip=self.clip_grads_at)
             if self.l1_factor > 1e-8:
                 reg_loss = 0
                 for param in self.net.parameters() if not isinstance(self.net,
