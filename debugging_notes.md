@@ -104,3 +104,16 @@ to be precisely the same value. Making an issue for this.
 Added code to detect NaNs, so I can at least see at what point they are
 occurring. Probably not enough to figure out what's going wrong, but can
 open a debugging or pickle the state when it happens to investigate next.
+
+31st January 2018
+-----------------
+
+Added gradient clipping to Bayesian compression experiments, which appears
+to have solved problems we were seeing with NaNs. Immediately tried to
+train a resnet50 with Adam as the optimizer (lr 0.001) and it failed to
+converge. Loss is minimized, but in a local optimum where accuracy is very
+low (20-30%).
+
+![](images/bayes_acc_3101.png)
+
+![](images/bayes_loss_3101.png)
