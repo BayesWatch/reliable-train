@@ -97,3 +97,10 @@ enough time to do that today.
 Satisficing experiment I was running in `satisficing.py` appears to have
 issues. Specifically, the predicted objective and actual objective appear
 to be precisely the same value. Making an issue for this.
+
+13th December 2017
+------------------
+
+Added code to detect NaNs, so I can at least see at what point they are
+occurring. Probably not enough to figure out what's going wrong, but can
+open a debugging or pickle the state when it happens to investigate next.

@@ -54,6 +54,11 @@ def reparameterize(mu, logvar, sampling=True):
     else:
         return mu
 
+def isnt_nan(t):
+    # funny that this is the only way I could find to do this
+    # https://discuss.pytorch.org/t/how-to-set-nan-in-tensor-to-0/3918/5
+    if (t.data != t.data).sum() > 0:
+        raise ValueError("NaN entries in tensor: %s"%str(t.data))
 
 # -------------------------------------------------------
 # LINEAR LAYER
@@ -142,29 +147,38 @@ class LinearGroupNJ(nn.Module):
         # compute z  
         # note that we reparametrise according to [2] Eq. (11) (not [1])
         z = reparameterize(self.z_mu.repeat(batch_size, 1), self.z_logvar.repeat(batch_size, 1), sampling=self.training)
+        isnt_nan(z)
 
         # apply local reparametrisation trick see [1] Eq. (6)
         # to the parametrisation given in [3] Eq. (6)
         xz = x * z
         mu_activations = F.linear(xz, self.weight_mu, self.bias_mu)
         var_activations = F.linear(xz.pow(2), self.weight_logvar.exp(), self.bias_logvar.exp())
+        isnt_nan(mu_activations)
+        isnt_nan(var_activations)
 
-        return reparameterize(mu_activations, var_activations.log(), sampling=self.training)
+        out = reparameterize(mu_activations, var_activations.log(), sampling=self.training)
+        isnt_nan(out)
+        return out
 
     def kl_divergence(self):
         # KL(q(z)||p(z))
         # we use the kl divergence approximation given by [2] Eq.(14)
         k1, k2, k3 = 0.63576, 1.87320, 1.48695
         log_alpha = self.get_log_dropout_rates()
-        KLD = -torch.sum(k1 * self.sigmoid(k2 + k3 * log_alpha) - 0.5 * self.softplus(-log_alpha) - k1)
+        KLD_element = k1 * self.sigmoid(k2 + k3 * log_alpha) - 0.5 * self.softplus(-log_alpha) - k1
+        isnt_nan(KLD_element)
+        KLD = -torch.sum(KLD_element)
 
         # KL(q(w|z)||p(w|z))
         # we use the kl divergence given by [3] Eq.(8)
         KLD_element = -0.5 * self.weight_logvar + 0.5 * (self.weight_logvar.exp() + self.weight_mu.pow(2)) - 0.5
+        isnt_nan(KLD_element)
         KLD += torch.sum(KLD_element)
 
         # KL bias
         KLD_element = -0.5 * self.bias_logvar + 0.5 * (self.bias_logvar.exp() + self.bias_mu.pow(2)) - 0.5
+        isnt_nan(KLD_element)
         KLD += torch.sum(KLD_element)
 
         return KLD
@@ -278,15 +292,19 @@ class _ConvNdGroupNJ(nn.Module):
         # we use the kl divergence approximation given by [2] Eq.(14)
         k1, k2, k3 = 0.63576, 1.87320, 1.48695
         log_alpha = self.get_log_dropout_rates()
-        KLD = -torch.sum(k1 * self.sigmoid(k2 + k3 * log_alpha) - 0.5 * self.softplus(-log_alpha) - k1)
+        KLD_element = k1 * self.sigmoid(k2 + k3 * log_alpha) - 0.5 * self.softplus(-log_alpha) - k1
+        isnt_nan(KLD_element)
+        KLD = -torch.sum(KLD_element)
 
         # KL(q(w|z)||p(w|z))
         # we use the kl divergence given by [3] Eq.(8)
         KLD_element = -self.weight_logvar + 0.5 * (self.weight_logvar.exp().pow(2) + self.weight_mu.pow(2)) - 0.5
+        isnt_nan(KLD_element)
         KLD += torch.sum(KLD_element)
 
         # KL bias
         KLD_element = -self.bias_logvar + 0.5 * (self.bias_logvar.exp().pow(2) + self.bias_mu.pow(2)) - 0.5
+        isnt_nan(KLD_element)
         KLD += torch.sum(KLD_element)
 
         return KLD
@@ -332,16 +350,20 @@ class Conv1dGroupNJ(_ConvNdGroupNJ):
         # to the parametrisation given in [3] Eq. (6)
         mu_activations = F.conv1d(x, self.weight_mu, self.bias_mu, self.stride,
                                   self.padding, self.dilation, self.groups)
+        isnt_nan(mu_activations)
 
         var_activations = F.conv1d(x.pow(2), self.weight_logvar.exp(), self.bias_logvar.exp(), self.stride,
                                    self.padding, self.dilation, self.groups)
+        isnt_nan(var_activations)
         # compute z
         # note that we reparametrise according to [2] Eq. (11) (not [1])
         z = reparameterize(self.z_mu.repeat(batch_size, 1, 1), self.z_logvar.repeat(batch_size, 1, 1),
                           sampling=self.training)
         z = z[:, :, None]
 
-        return reparameterize(mu_activations * z, (var_activations * z.pow(2)).log(), sampling=self.training)
+        out = reparameterize(mu_activations * z, (var_activations * z.pow(2)).log(), sampling=self.training)
+        isnt_nan(out)
+        return out
 
     def __repr__(self):
         return self.__class__.__name__ + ' (' \
@@ -373,16 +395,21 @@ class Conv2dGroupNJ(_ConvNdGroupNJ):
         # to the parametrisation given in [3] Eq. (6)
         mu_activations = F.conv2d(x, self.weight_mu, self.bias_mu, self.stride,
                                   self.padding, self.dilation, self.groups)
+        isnt_nan(mu_activations)
 
         var_activations = F.conv2d(x.pow(2), self.weight_logvar.exp(), self.bias_logvar.exp(), self.stride,
                                    self.padding, self.dilation, self.groups)
+        isnt_nan(var_activations)
         # compute z
         # note that we reparametrise according to [2] Eq. (11) (not [1])
         z = reparameterize(self.z_mu.repeat(batch_size, 1), self.z_logvar.repeat(batch_size, 1),
                           sampling=self.training)
         z = z[:, :, None, None]
+        isnt_nan(z)
 
-        return reparameterize(mu_activations * z, (var_activations * z.pow(2)).log(), sampling=self.training)
+        out = reparameterize(mu_activations * z, (var_activations * z.pow(2)).log(), sampling=self.training)
+        isnt_nan(out)
+        return out
 
     def __repr__(self):
         return self.__class__.__name__ + ' (' \
@@ -414,17 +441,22 @@ class Conv3dGroupNJ(_ConvNdGroupNJ):
         # to the parametrisation given in [3] Eq. (6)
         mu_activations = F.conv3d(x, self.weight_mu, self.bias_mu, self.stride,
                                   self.padding, self.dilation, self.groups)
+        isnt_nan(mu_activations)
 
         var_weights = self.weight_logvar.exp()
         var_activations = F.conv3d(x.pow(2), var_weights, self.bias_logvar.exp(), self.stride,
                                    self.padding, self.dilation, self.groups)
+        isnt_nan(var_activations)
         # compute z
         # note that we reparametrise according to [2] Eq. (11) (not [1])
         z = reparameterize(self.z_mu.repeat(batch_size, 1, 1, 1, 1), self.z_logvar.repeat(batch_size, 1, 1, 1, 1),
                           sampling=self.training)
         z = z[:, :, None, None, None]
+        isnt_nan(z)
 
-        return reparameterize(mu_activations * z, (var_activations * z.pow(2)).log(), sampling=self.training)
+        out = reparameterize(mu_activations * z, (var_activations * z.pow(2)).log(), sampling=self.training)
+        isnt_nan(out)
+        return out
 
     def __repr__(self):
         return self.__class__.__name__ + ' (' \

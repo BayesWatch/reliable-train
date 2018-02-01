@@ -180,6 +180,12 @@ def test():
     net = ResNet50(4,nn.Conv2d,nn.Linear)
     y = net(Variable(torch.randn(1,3,32,32)))
     print(y.size())
+    # count no. of params in model
+    from functools import reduce
+    total = 0
+    for p in net.parameters():
+        total += reduce(lambda a,b: a*b, p.size())
+    print("Model contains %i parameters"%total)
 
 if __name__ == '__main__':
     test()

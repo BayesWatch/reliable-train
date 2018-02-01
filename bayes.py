@@ -21,7 +21,7 @@ from utils import ProgressBar, sigterm_handler, cleanup
 from checkpoint import Checkpoint, format_settings_str, sparsity
 from data import cifar10
 from seppuku import exit_after
-from models.BayesianLayers import LinearGroupNJ, Conv2dGroupNJ
+from models.BayesianLayers import LinearGroupNJ, Conv2dGroupNJ, isnt_nan
 
 from itertools import combinations
 
@@ -217,6 +217,7 @@ def main(args):
         for inputs, targets in trainloader:
             batch_idx += 1
             loss = checkpoint.propagate(inputs, targets, batch_idx, should_update=True)
+            assert not np.isnan(loss)
             clip_variances(checkpoint.net)
             train_loss += loss
 

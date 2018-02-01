@@ -44,7 +44,7 @@ def parse(to_parse=None):
     parser.add_argument('--model_multiplier', default=4, type=int, help='multiplier for number of planes in model')
     parser.add_argument('-v', action='store_true', help='verbose with progress bar')
     parser.add_argument('--evaluate', action='store_true', help='run on test set')
-    parser.add_argument('--deep_compression', action='store_true', help='use deep compression to sparsify')
+    parser.add_argument('--deep_compression', default=1.0, type=float, help='prescribed sparsity to implement with pruning')
     parser.add_argument('--clean', action='store_true', help='Whether to start from clean (WILL DELETE OLD FILES).')
     parser.add_argument('--sgdr', action='store_true', help='use the SGDR learning rate schedule')
     args = parser.parse_args(to_parse)
@@ -73,8 +73,8 @@ def format_model_tag(model, model_multiplier, l1, l2, deep_compression, sgdr):
         model_tag = model+".%02d"%model_multiplier+format_l1(l1)+format_l2(l2)
     else:
         model_tag = model+format_l1(l1)+format_l2(l2)
-    if deep_compression:
-        model_tag += '.dc'
+    if deep_compression < 0.99:
+        model_tag += '.dc_%05.3f'%deep_compression
     if sgdr:
         model_tag += '.sgdr'
     return model_tag
@@ -96,6 +96,8 @@ def main(args):
 
     # Set where to save and load checkpoints, use model_tag for directory name
     model_tag = format_model_tag(args.model, args.model_multiplier, args.l1, args.l2, args.deep_compression, args.sgdr)
+    if args.v:
+        print(model_tag)
 
     checkpoint_loc = os.path.join(args.scratch, 'checkpoint', model_tag)
     # Set where to append tensorboard logs
@@ -145,9 +147,11 @@ def main(args):
         model = MobileNet()
 
     # choose model from args
-    if args.deep_compression:
-        from deep_compression import MaskedSGD
-        Optimizer = MaskedSGD
+    if args.deep_compression < 0.99:
+        from deep_compression import ExactSparsity
+        def get_optimizer(parameters, **kwargs):
+            return ExactSparsity(parameters, args.deep_compression, **kwargs)
+        Optimizer = get_optimizer
     else:
         Optimizer = optim.SGD
 
@@ -210,8 +214,6 @@ if __name__ == '__main__':
 
     # initialise logging
     model_tag = format_model_tag(args.model, args.model_multiplier, args.l1, args.l2, args.deep_compression, args.sgdr)
-    if args.deep_compression:
-        model_tag += '.dc'
     logging_loc = os.path.join(args.scratch, 'checkpoint', model_tag, 'errors.log')
     if not os.path.isdir(os.path.dirname(logging_loc)):
         os.makedirs(os.path.dirname(logging_loc))
