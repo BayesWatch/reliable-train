@@ -32,6 +32,8 @@ SOFTWARE.
 
 import math
 
+import numpy as np
+
 import torch
 from torch.nn.parameter import Parameter
 import torch.nn.functional as F
@@ -74,7 +76,7 @@ class LinearGroupNJ(nn.Module):
     """
 
     def __init__(self, in_features, out_features, init_weight=None,
-            init_bias=None, clip_var=0.5):
+            init_bias=None, clip_var=0.5, threshold=-3.):
 
         super(LinearGroupNJ, self).__init__()
         self.in_features = in_features
@@ -101,6 +103,9 @@ class LinearGroupNJ(nn.Module):
 
         # numerical stability param
         self.epsilon = 1e-8
+
+        # threshold for the mask
+        self.threshold = threshold
 
     def reset_parameters(self, init_weight, init_bias):
         # init means
@@ -147,18 +152,14 @@ class LinearGroupNJ(nn.Module):
         # compute z  
         # note that we reparametrise according to [2] Eq. (11) (not [1])
         z = reparameterize(self.z_mu.repeat(batch_size, 1), self.z_logvar.repeat(batch_size, 1), sampling=self.training)
-        isnt_nan(z)
 
         # apply local reparametrisation trick see [1] Eq. (6)
         # to the parametrisation given in [3] Eq. (6)
         xz = x * z
         mu_activations = F.linear(xz, self.weight_mu, self.bias_mu)
         var_activations = F.linear(xz.pow(2), self.weight_logvar.exp(), self.bias_logvar.exp())
-        isnt_nan(mu_activations)
-        isnt_nan(var_activations)
 
         out = reparameterize(mu_activations, var_activations.log(), sampling=self.training)
-        isnt_nan(out)
         return out
 
     def kl_divergence(self):
@@ -167,21 +168,25 @@ class LinearGroupNJ(nn.Module):
         k1, k2, k3 = 0.63576, 1.87320, 1.48695
         log_alpha = self.get_log_dropout_rates()
         KLD_element = k1 * self.sigmoid(k2 + k3 * log_alpha) - 0.5 * self.softplus(-log_alpha) - k1
-        isnt_nan(KLD_element)
         KLD = -torch.sum(KLD_element)
 
         # KL(q(w|z)||p(w|z))
         # we use the kl divergence given by [3] Eq.(8)
         KLD_element = -0.5 * self.weight_logvar + 0.5 * (self.weight_logvar.exp() + self.weight_mu.pow(2)) - 0.5
-        isnt_nan(KLD_element)
         KLD += torch.sum(KLD_element)
 
         # KL bias
         KLD_element = -0.5 * self.bias_logvar + 0.5 * (self.bias_logvar.exp() + self.bias_mu.pow(2)) - 0.5
-        isnt_nan(KLD_element)
         KLD += torch.sum(KLD_element)
 
         return KLD
+
+    def get_mask(self):
+        # return the mask on the weight given the threshold and log_var we have
+        log_alpha = self.get_log_dropout_rates().cpu().data.numpy()
+        mask = log_alpha < self.threshold
+        weight_mask = np.ones_like(self.weight_mu.data.numpy())*mask.reshape(-1,1)
+        return weight_mask
 
     def __repr__(self):
         return self.__class__.__name__ + ' (' \
@@ -201,8 +206,9 @@ class _ConvNdGroupNJ(nn.Module):
     [2] Molchanov, Dmitry, Arsenii Ashukha, and Dmitry Vetrov. "Variational Dropout Sparsifies Deep Neural Networks." ICML (2017).
     [3] Louizos, Christos, Karen Ullrich, and Max Welling. "Bayesian Compression for Deep Learning." NIPS (2017).
     """
-    def __init__(self, in_channels, out_channels, kernel_size, stride, padding, dilation, transposed, output_padding,
-                 groups, bias, init_weight, init_bias, clip_var=0.5):
+    def __init__(self, in_channels, out_channels, kernel_size, stride, padding,
+            dilation, transposed, output_padding, groups, bias, init_weight,
+            init_bias, clip_var=0.5, threshold=-3.):
         super(_ConvNdGroupNJ, self).__init__()
         if in_channels % groups != 0:
             raise ValueError('in_channels must be divisible by groups')
@@ -246,6 +252,9 @@ class _ConvNdGroupNJ(nn.Module):
         # numerical stability param
         self.epsilon = 1e-8
 
+        # threshold for mask
+        self.threshold = threshold
+
     def reset_parameters(self, init_weight, init_bias):
         # init means
         n = self.in_channels
@@ -283,8 +292,9 @@ class _ConvNdGroupNJ(nn.Module):
 
     def compute_posterior_params(self):
         weight_var, z_var = self.weight_logvar.exp(), self.z_logvar.exp()
-        self.post_weight_var = self.z_mu.pow(2) * weight_var + z_var * self.weight_mu.pow(2) + z_var * weight_var
-        self.post_weight_mu = self.weight_mu * self.z_mu
+        z_mu, z_var = self.z_mu.view(-1,1,1,1), z_var.view(-1,1,1,1)
+        self.post_weight_var = z_mu.pow(2) * weight_var + z_var * self.weight_mu.pow(2) + z_var * weight_var
+        self.post_weight_mu = self.weight_mu * z_mu
         return self.post_weight_mu, self.post_weight_var
 
     def kl_divergence(self):
@@ -293,21 +303,28 @@ class _ConvNdGroupNJ(nn.Module):
         k1, k2, k3 = 0.63576, 1.87320, 1.48695
         log_alpha = self.get_log_dropout_rates()
         KLD_element = k1 * self.sigmoid(k2 + k3 * log_alpha) - 0.5 * self.softplus(-log_alpha) - k1
-        isnt_nan(KLD_element)
         KLD = -torch.sum(KLD_element)
 
         # KL(q(w|z)||p(w|z))
         # we use the kl divergence given by [3] Eq.(8)
-        KLD_element = -self.weight_logvar + 0.5 * (self.weight_logvar.exp().pow(2) + self.weight_mu.pow(2)) - 0.5
-        isnt_nan(KLD_element)
+        #KLD_element = -self.weight_logvar + 0.5 * (self.weight_logvar.exp().pow(2) + self.weight_mu.pow(2)) - 0.5
+        KLD_element = -self.weight_logvar + 0.5 * (self.weight_logvar.exp() + self.weight_mu.pow(2)) - 0.5
         KLD += torch.sum(KLD_element)
 
         # KL bias
-        KLD_element = -self.bias_logvar + 0.5 * (self.bias_logvar.exp().pow(2) + self.bias_mu.pow(2)) - 0.5
-        isnt_nan(KLD_element)
+        #KLD_element = -self.bias_logvar + 0.5 * (self.bias_logvar.exp().pow(2) + self.bias_mu.pow(2)) - 0.5
+        KLD_element = -self.bias_logvar + 0.5 * (self.bias_logvar.exp() + self.bias_mu.pow(2)) - 0.5
         KLD += torch.sum(KLD_element)
 
         return KLD
+
+    def get_mask(self):
+        # return the mask on the weight given the threshold and log_var we have
+        log_alpha = self.get_log_dropout_rates().cpu().data.numpy()
+        mask = log_alpha < self.threshold
+        print(max(log_alpha), (1 - mask).sum())
+        weight_mask = np.ones_like(self.weight_mu.data.cpu().numpy())*mask.reshape(-1,1,1,1)
+        return weight_mask
 
     def __repr__(self):
         s = ('{name}({in_channels}, {out_channels}, kernel_size={kernel_size}'
@@ -350,11 +367,9 @@ class Conv1dGroupNJ(_ConvNdGroupNJ):
         # to the parametrisation given in [3] Eq. (6)
         mu_activations = F.conv1d(x, self.weight_mu, self.bias_mu, self.stride,
                                   self.padding, self.dilation, self.groups)
-        isnt_nan(mu_activations)
 
         var_activations = F.conv1d(x.pow(2), self.weight_logvar.exp(), self.bias_logvar.exp(), self.stride,
                                    self.padding, self.dilation, self.groups)
-        isnt_nan(var_activations)
         # compute z
         # note that we reparametrise according to [2] Eq. (11) (not [1])
         z = reparameterize(self.z_mu.repeat(batch_size, 1, 1), self.z_logvar.repeat(batch_size, 1, 1),
@@ -362,7 +377,6 @@ class Conv1dGroupNJ(_ConvNdGroupNJ):
         z = z[:, :, None]
 
         out = reparameterize(mu_activations * z, (var_activations * z.pow(2)).log(), sampling=self.training)
-        isnt_nan(out)
         return out
 
     def __repr__(self):
@@ -395,20 +409,16 @@ class Conv2dGroupNJ(_ConvNdGroupNJ):
         # to the parametrisation given in [3] Eq. (6)
         mu_activations = F.conv2d(x, self.weight_mu, self.bias_mu, self.stride,
                                   self.padding, self.dilation, self.groups)
-        isnt_nan(mu_activations)
 
         var_activations = F.conv2d(x.pow(2), self.weight_logvar.exp(), self.bias_logvar.exp(), self.stride,
                                    self.padding, self.dilation, self.groups)
-        isnt_nan(var_activations)
         # compute z
         # note that we reparametrise according to [2] Eq. (11) (not [1])
         z = reparameterize(self.z_mu.repeat(batch_size, 1), self.z_logvar.repeat(batch_size, 1),
                           sampling=self.training)
         z = z[:, :, None, None]
-        isnt_nan(z)
 
         out = reparameterize(mu_activations * z, (var_activations * z.pow(2)).log(), sampling=self.training)
-        isnt_nan(out)
         return out
 
     def __repr__(self):
@@ -441,21 +451,17 @@ class Conv3dGroupNJ(_ConvNdGroupNJ):
         # to the parametrisation given in [3] Eq. (6)
         mu_activations = F.conv3d(x, self.weight_mu, self.bias_mu, self.stride,
                                   self.padding, self.dilation, self.groups)
-        isnt_nan(mu_activations)
 
         var_weights = self.weight_logvar.exp()
         var_activations = F.conv3d(x.pow(2), var_weights, self.bias_logvar.exp(), self.stride,
                                    self.padding, self.dilation, self.groups)
-        isnt_nan(var_activations)
         # compute z
         # note that we reparametrise according to [2] Eq. (11) (not [1])
         z = reparameterize(self.z_mu.repeat(batch_size, 1, 1, 1, 1), self.z_logvar.repeat(batch_size, 1, 1, 1, 1),
                           sampling=self.training)
         z = z[:, :, None, None, None]
-        isnt_nan(z)
 
         out = reparameterize(mu_activations * z, (var_activations * z.pow(2)).log(), sampling=self.training)
-        isnt_nan(out)
         return out
 
     def __repr__(self):
