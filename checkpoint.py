@@ -115,7 +115,7 @@ class Checkpoint(object):
 
     def save(self, acc, loss, epoch):
         state = {
-            'net': self.net,
+            'net': self.net.state_dict(),
             'optimizer_state': self.optimizer.state_dict(),
             'acc': acc,
             'loss': loss,
@@ -158,7 +158,8 @@ class Checkpoint(object):
         state = torch.load(self.most_recent_saved['abspath'])
         opt_state = state['optimizer_state']
         self.optimizer.load_state_dict(opt_state)
-        return state['net'], state['acc'], state['loss'], state['epoch']
+        net = self.net.load_state_dict(state['net'])
+        return net, state['acc'], state['loss'], state['epoch']
 
     def init_for_epoch(self, gpu_index, should_update, epoch_size=None):
         self.gpu_index = gpu_index
