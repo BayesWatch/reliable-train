@@ -281,3 +281,17 @@ fall apart.
 It may be interesting to see if there is indeed some phase change point
 where the network will no longer be able to learn after sparsification
 occurs when training with deep compression.
+
+2nd February 2018
+-----------------
+
+Training a larger convolutional architecture on CIFAR-10 using Bayesian
+Compression has failed so far. With gradient clipping have been able to
+train a small all-convolutional network. But, seems like it's going to be
+necessary to tune the prior variance; weighting the regularisation part of
+the ELBO less. In the following red is with 0.1 weighting on the
+regularisation, 1.0 is orange and grey is just the same network trained
+vanilla with sgd. The Adam training may just have converged a little worse,
+but it seems to be around good enough, and it's not overfitting:
+
+![](images/bayes_acc_0202.png)
