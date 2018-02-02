@@ -117,3 +117,25 @@ low (20-30%).
 ![](images/bayes_acc_3101.png)
 
 ![](images/bayes_loss_3101.png)
+
+1st February 2018
+-----------------
+
+Running a tiny all convolutional network after fixing a probable bug in the
+optimizer initialisation implementation. The small network converges a lot
+more easily than the deep resnet. Probably it's not having such a large
+problem with the ELBO, thanks to having fewer parameters. However,
+comparing it to training the same network without bayesian compression, it
+looks like it's not overfitting the same way.
+
+The vanilla network is in grey:
+
+![](images/bayes_acc_0102.png)
+
+With Bayesian compression the network is underfitting, but the validation
+and training accuracies are tracking nicely. Without, the network overfits
+in the classic way neural networks do.
+
+**Important note**: the learning rate decays in the vanilla training, but
+not in the Bayesian compression one. It would be interesting to see if that
+would help.
