@@ -295,3 +295,6 @@ vanilla with sgd. The Adam training may just have converged a little worse,
 but it seems to be around good enough, and it's not overfitting:
 
 ![](images/bayes_acc_0202.png)
+
+Opening up that saved model and it appears the variances of the posteriors
+are wrong. These results are suspicious until I get to the bottom of that.
