@@ -34,19 +34,19 @@ signal.signal(signal.SIGTERM, sigterm_handler)
 
 def parse(to_parse=None):
     parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training\nlearning rate will decay every 60 epochs')
-    parser.add_argument('config_id', type=str, help='config identity str, parsed for lr, lr_decay and minibatch size, looks like: "<lr>_<lr_decay>_<minibatch_size>"')
+    parser.add_argument('config_id', type=str, help='config identity str, parsed for lr, lr_decay and minibatch size, looks like: "<lr>_<lr_decay>"')
     parser.add_argument('--scratch', '-s', default=os.environ.get('SCRATCH',os.getcwd()), help='place to store data')
     parser.add_argument('--minibatch', '-M', type=int, default=64, help='minibatch size')
     parser.add_argument('--l2', default=5e-4, type=float, help='l2 regularisation factor')
     parser.add_argument('--epochs', '-N', default=180, help='number of epochs to train for')
     parser.add_argument('--gpu', default=0, help='index of gpu to use')
     parser.add_argument('--multi_gpu', action='store_true', help='use all available gpus')
-    parser.add_argument('--model', default='resnet50', type=str, help='string to choose model')
+    parser.add_argument('--model', default='allconv', type=str, help='string to choose model')
     parser.add_argument('--model_multiplier', default=4, type=int, help='multiplier for number of planes in model')
     parser.add_argument('-v', action='store_true', help='verbose with progress bar')
     parser.add_argument('--evaluate', action='store_true', help='run on test set')
-    parser.add_argument('--deep_compression', action='store_true', help='use deep compression to sparsify')
     parser.add_argument('--clean', action='store_true', help='Whether to start from clean (WILL DELETE OLD FILES).')
+    parser.add_argument('--kl_weight', type=float, default=1.0, help='term to weight of the regularisation term')
     args = parser.parse_args(to_parse)
     return args
 
@@ -113,7 +113,7 @@ def format_model_tag(model, model_multiplier):
         model_tag = model+".%02d"%model_multiplier
     else:
         model_tag = model
-    model_tag += '.bayes'
+    model_tag += '.bayes.0p1'
     return model_tag
 
 def kl_divergence(model):
@@ -133,6 +133,7 @@ def clip_variances(model):
         # recursive walk through all modules
         if hasattr(m, 'clip_variances'):
             m.clip_variances()
+
 
 def main(args):
     if args.v:
@@ -177,7 +178,6 @@ def main(args):
         return decay_ratio**math.floor(batch_idx/period)
     schedule = standard_schedule
 
-
     # complicated way to initialise the Checkpoint object that'll hold our
     # model
     if 'VGG' in model_tag:
@@ -187,34 +187,41 @@ def main(args):
     elif 'resnet' in model_tag:
         if '50' in model_tag:
             model = ResNet50(args.model_multiplier, Conv2dGroupNJ, LinearGroupNJ)
+    elif 'allconv' in model_tag:
+        model = AllConv(Conv2d=Conv2dGroupNJ)
+    else:
+        raise NotImplementedError("Don't know what model %s should mean."%model_tag)
 
-    Optimizer = optim.SGD
+    optimizer= optim.Adam(model.parameters(), lr=lr)
 
     discrimination_loss = nn.functional.cross_entropy
 
     class ELBO(object):
         """Variationally regularised cross-entropy."""
-        def __init__(self):
+        def __init__(self, weight=1.0):
             self.model = model
             self.N = float(len(trainloader)*trainloader.batch_size)
+            self.weight = weight
         def __call__(self, outputs, targets):
             kl = kl_divergence(model)
             discrimination_error = discrimination_loss(outputs, targets)
-            variational_bound = discrimination_error + kl/self.N
+            variational_bound = discrimination_error + self.weight*kl/self.N
             return variational_bound.cuda()
 
-    checkpoint = Checkpoint(model, lr, lr_decay, args.minibatch,
-            schedule, checkpoint_loc, log_loc, verbose=args.v,
-            multi_gpu=args.multi_gpu, l1_factor=0., l2_factor=0.,
-            Optimizer=Optimizer, CriterionConstructor=ELBO)
+    checkpoint = Checkpoint(model, lr, lr_decay, args.minibatch, schedule,
+            checkpoint_loc, log_loc, optimizer, verbose=args.v,
+            multi_gpu=args.multi_gpu, l1_factor=0.,
+            CriterionConstructor=ELBO, clip_grads_at=0.2)
 
-    @exit_after(240)
+    #@exit_after(240)
     def train(checkpoint, trainloader):
         checkpoint.init_for_epoch(gpu_index, should_update=True, epoch_size=len(trainloader))
 
         batch_idx = 0
         train_loss = 0.
         for inputs, targets in trainloader:
+            checkpoint.criterion.weight = min(args.kl_weight, float(checkpoint.minibatch_idx)/(len(trainloader)*4))
+
             batch_idx += 1
             loss = checkpoint.propagate(inputs, targets, batch_idx, should_update=True)
             assert not np.isnan(loss)
@@ -229,7 +236,7 @@ def main(args):
         checkpoint.epoch += 1
         return train_loss
     
-    @exit_after(240)
+    #@exit_after(240)
     def validate(checkpoint, loader, save=False):
         checkpoint.init_for_epoch(gpu_index, should_update=False)
 
@@ -277,8 +284,6 @@ if __name__ == '__main__':
 
     # initialise logging
     model_tag = format_model_tag(args.model, args.model_multiplier)
-    if args.deep_compression:
-        model_tag += '.dc'
     logging_loc = os.path.join(args.scratch, 'checkpoint', model_tag, 'errors.log')
     if not os.path.isdir(os.path.dirname(logging_loc)):
         os.makedirs(os.path.dirname(logging_loc))
