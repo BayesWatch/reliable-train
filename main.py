@@ -145,20 +145,23 @@ def main(args):
             model = ResNet50(args.model_multiplier, nn.Conv2d, nn.Linear)
     elif 'mobilenet' in model_tag:
         model = MobileNet()
+    elif 'allconv' in model_tag:
+        model = AllConv()
+    else:
+        raise NotImplementedError("Don't know what model %s should mean."%model_tag)
 
     # choose model from args
     if args.deep_compression < 0.99:
         from deep_compression import ExactSparsity
-        def get_optimizer(parameters, **kwargs):
-            return ExactSparsity(parameters, args.deep_compression, **kwargs)
-        Optimizer = get_optimizer
+        optimizer = ExactSparsity(model.parameters(), args.deep_compression,
+                lr=lr, momentum=0.9, weight_decay=args.l2)
     else:
-        Optimizer = optim.SGD
+        optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=args.l2)
 
     checkpoint = Checkpoint(model, lr, lr_decay, minibatch,
             schedule, checkpoint_loc, log_loc, verbose=args.v,
             multi_gpu=args.multi_gpu, l1_factor=args.l1, l2_factor=args.l2,
-            Optimizer=Optimizer, lr_period=lr_period)
+            optimizer=optimizer, lr_period=lr_period)
 
     def train(checkpoint, trainloader):
         checkpoint.init_for_epoch(gpu_index, should_update=True, epoch_size=len(trainloader))
