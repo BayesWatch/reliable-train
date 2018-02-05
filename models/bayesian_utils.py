@@ -33,6 +33,8 @@ import os
 import numpy as np
 import imageio
 
+import matplotlib
+matplotlib.use('qt5agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
 

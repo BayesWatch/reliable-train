@@ -211,7 +211,7 @@ def main():
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--epochs', type=int, default=5)
+    parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--batchsize', type=int, default=128)
     parser.add_argument('--thresholds', type=float, nargs='*', default=[-2.8, -3., -5.])
 
