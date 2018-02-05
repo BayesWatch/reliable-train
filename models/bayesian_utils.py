@@ -72,9 +72,14 @@ def visualise_weights(weight_mus, log_alphas, epoch):
         # alpha
         log_alpha_fc1 = log_alphas[i].unsqueeze(1).cpu().data.numpy()
         log_alpha_fc1 = log_alpha_fc1 < -3
-        log_alpha_fc2 = log_alphas[i + 1].unsqueeze(0).cpu().data.numpy()
-        log_alpha_fc2 = log_alpha_fc2 < -3
-        mask = log_alpha_fc1 + log_alpha_fc2
+        if weight_mu.ndim == 2:
+            log_alpha_fc2 = log_alphas[i + 1].unsqueeze(0).cpu().data.numpy()
+            log_alpha_fc2 = log_alpha_fc2 < -3
+            mask = log_alpha_fc1 + log_alpha_fc2
+        else:
+            d = log_alpha_fc1.shape[0]
+            weight_mu = weight_mu.squeeze()
+            mask = np.ones_like(weight_mu)*log_alpha_fc1.reshape(1,d)
         # weight
         c = np.max(np.abs(weight_mu))
         s = ax.imshow(weight_mu * mask, cmap='seismic', interpolation='none', vmin=-c, vmax=c)

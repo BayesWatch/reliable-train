@@ -64,6 +64,10 @@ def kl_divergence(model):
             KLD += m.kl_divergence()
     return KLD
 
+def clip_grads(model, clip=0.2):
+    for p in model.parameters():
+        p.grad.data.clamp_(-clip, clip)
+
 
 def main():
     # import data
@@ -94,38 +98,18 @@ def main():
             # activation
             self.relu = nn.ReLU()
             # layers
-            self.fc1 = BayesianLayers.Conv2dGroupNJ(28 * 28, 300, 1, clip_var=0.04) 
-            self.fc2 = BayesianLayers.Conv2dGroupNJ(300, 100, 1)
-            self.fc3 = BayesianLayers.LinearGroupNJ(100, 10)
+            self.fc1 = BayesianLayers.Conv2dGroupNJ(28 * 28, 300, 1, clip_var=0.04, threshold=FLAGS.thresholds[0]) 
+            self.fc2 = BayesianLayers.Conv2dGroupNJ(300, 100, 1, threshold=FLAGS.thresholds[1])
+            #self.fc3 = BayesianLayers.LinearGroupNJ(100, 10)
+            self.fc3 = BayesianLayers.Conv2dGroupNJ(100, 10, 1, threshold=FLAGS.thresholds[2])
             # layers including kl_divergence
             self.kl_list = [self.fc1, self.fc2, self.fc3]
 
         def forward(self, x):
             x = x.view(-1, 28 * 28, 1, 1)
             x = self.relu(self.fc1(x))
-            x = self.relu(self.fc2(x)).view(-1, 100)
-            return self.fc3(x)
-
-        def get_masks(self,thresholds):
-            weight_masks = []
-            mask = None
-            for i, (layer, threshold) in enumerate(zip(self.kl_list, thresholds)):
-                # compute dropout mask
-                if mask is None:
-                    log_alpha = layer.get_log_dropout_rates().cpu().data.numpy()
-                    mask = log_alpha < threshold
-                else:
-                    mask = np.copy(next_mask)
-                try:
-                    log_alpha = layers[i + 1].get_log_dropout_rates().cpu().data.numpy()
-                    next_mask = log_alpha < thresholds[i + 1]
-                except:
-                    # must be the last mask
-                    next_mask = np.ones(10)
-
-                weight_mask = np.expand_dims(mask, axis=0) * np.expand_dims(next_mask, axis=1)
-                weight_masks.append(weight_mask.astype(np.float))
-            return weight_masks
+            x = self.relu(self.fc2(x))
+            return self.fc3(x).view(-1, 10)
 
     # init model
     model = Net()
@@ -156,6 +140,7 @@ def main():
             output = model(data)
             loss = objective(output, target, kl_divergence(model))
             loss.backward()
+            clip_grads(model)
             optimizer.step()
             # clip the variances after each step
             for layer in model.kl_list:
@@ -190,22 +175,23 @@ def main():
                       model.fc3.get_log_dropout_rates()]
         visualise_weights(weight_mus, log_alphas, epoch=epoch)
         log_alpha = model.fc1.get_log_dropout_rates().cpu().data.numpy()
-        visualize_pixel_importance(images, log_alpha=log_alpha, epoch=str(epoch))
+        #visualize_pixel_importance(images, log_alpha=log_alpha, epoch=str(epoch))
 
-    generate_gif(save='pixel', epochs=FLAGS.epochs)
+    #generate_gif(save='pixel', epochs=FLAGS.epochs)
     generate_gif(save='weight0_e', epochs=FLAGS.epochs)
     generate_gif(save='weight1_e', epochs=FLAGS.epochs)
 
     # compute compression rate and new model accuracy
     layers = [model.fc1, model.fc2, model.fc3]
     thresholds = FLAGS.thresholds
-    CR_architecture, CR_fast_inference = compute_compression_rate(layers, model.get_masks(thresholds))
+    masks  = [l.get_mask() for l in layers]
+    CR_architecture, CR_fast_inference = compute_compression_rate(layers, masks)
     print("Compressing the architecture will decrease the model by a factor of %.1f." % (CR_architecture))
     print("Making use of weight uncertainty can reduce the model by a factor of %.1f." % (CR_fast_inference))
 
     print("Test error after with reduced bit precision:")
 
-    weights = compute_reduced_weights(layers, model.get_masks(thresholds))
+    weights = compute_reduced_weights(layers, masks)
     for layer, weight in zip(layers, weights):
         if FLAGS.cuda:
             layer.post_weight_mu.data = torch.Tensor(weight).cuda()

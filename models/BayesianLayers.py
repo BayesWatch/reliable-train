@@ -307,12 +307,10 @@ class _ConvNdGroupNJ(nn.Module):
 
         # KL(q(w|z)||p(w|z))
         # we use the kl divergence given by [3] Eq.(8)
-        #KLD_element = -self.weight_logvar + 0.5 * (self.weight_logvar.exp().pow(2) + self.weight_mu.pow(2)) - 0.5
         KLD_element = -self.weight_logvar + 0.5 * (self.weight_logvar.exp() + self.weight_mu.pow(2)) - 0.5
         KLD += torch.sum(KLD_element)
 
         # KL bias
-        #KLD_element = -self.bias_logvar + 0.5 * (self.bias_logvar.exp().pow(2) + self.bias_mu.pow(2)) - 0.5
         KLD_element = -self.bias_logvar + 0.5 * (self.bias_logvar.exp() + self.bias_mu.pow(2)) - 0.5
         KLD += torch.sum(KLD_element)
 
@@ -322,7 +320,7 @@ class _ConvNdGroupNJ(nn.Module):
         # return the mask on the weight given the threshold and log_var we have
         log_alpha = self.get_log_dropout_rates().cpu().data.numpy()
         mask = log_alpha < self.threshold
-        print(max(log_alpha), (1 - mask).sum())
+        #print(max(log_alpha), (1 - mask).sum())
         weight_mask = np.ones_like(self.weight_mu.data.cpu().numpy())*mask.reshape(-1,1,1,1)
         return weight_mask
 
@@ -390,7 +388,7 @@ class Conv2dGroupNJ(_ConvNdGroupNJ):
     """
 
     def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0, dilation=1, groups=1, bias=True,
-                 init_weight=None, init_bias=None, clip_var=0.5):
+                 init_weight=None, init_bias=None, clip_var=0.5, threshold=-3.):
         kernel_size = utils._pair(kernel_size)
         stride = utils._pair(stride)
         padding = utils._pair(padding)
@@ -398,7 +396,7 @@ class Conv2dGroupNJ(_ConvNdGroupNJ):
 
         super(Conv2dGroupNJ, self).__init__(
             in_channels, out_channels, kernel_size, stride, padding, dilation,
-            False, utils._pair(0), groups, bias, init_weight, init_bias, clip_var)
+            False, utils._pair(0), groups, bias, init_weight, init_bias, clip_var, threshold)
 
     def forward(self, x):
         if self.deterministic:
