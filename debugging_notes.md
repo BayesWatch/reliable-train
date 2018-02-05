@@ -139,3 +139,27 @@ in the classic way neural networks do.
 **Important note**: the learning rate decays in the vanilla training, but
 not in the Bayesian compression one. It would be interesting to see if that
 would help.
+
+5th February 2018
+-----------------
+
+Running the original bayesian compression code to see what the results it
+actually generates are, so that we know what we should be getting out of
+it. After training for 5 epochs, it says:
+
+```
+Compressing the architecture will decrease the model by a factor of 1.3.
+Making use of weight uncertainty can reduce the model by a factor of 4.1.
+Test error after with reduced bit precision:
+Test loss: 0.0800, Accuracy: 9732/10000 (97.32%)
+```
+
+It also produces the following images:
+
+![](images/pixel_original.gif)
+
+![](images/weight0_e_original.gif)
+
+![](images/weight1_e_original.gif)
+
+
