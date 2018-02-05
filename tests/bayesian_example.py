@@ -94,16 +94,16 @@ def main():
             # activation
             self.relu = nn.ReLU()
             # layers
-            self.fc1 = BayesianLayers.LinearGroupNJ(28 * 28, 300, clip_var=0.04) 
-            self.fc2 = BayesianLayers.LinearGroupNJ(300, 100)
+            self.fc1 = BayesianLayers.Conv2dGroupNJ(28 * 28, 300, 1, clip_var=0.04) 
+            self.fc2 = BayesianLayers.Conv2dGroupNJ(300, 100, 1)
             self.fc3 = BayesianLayers.LinearGroupNJ(100, 10)
             # layers including kl_divergence
             self.kl_list = [self.fc1, self.fc2, self.fc3]
 
         def forward(self, x):
-            x = x.view(-1, 28 * 28)
+            x = x.view(-1, 28 * 28, 1, 1)
             x = self.relu(self.fc1(x))
-            x = self.relu(self.fc2(x))
+            x = self.relu(self.fc2(x)).view(-1, 100)
             return self.fc3(x)
 
         def get_masks(self,thresholds):
