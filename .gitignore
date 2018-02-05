@@ -86,3 +86,4 @@ dummy
 
 # don't commit random results files
 satisficing
+.idea/

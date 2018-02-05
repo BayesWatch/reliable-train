@@ -36,13 +36,13 @@ class AllConv(nn.Module):
             Conv2d(n_filters*2, n_filters*2, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm2d(n_filters*2),
             nn.ReLU(inplace=True),
-            Conv2d(n_filters*2, n_filters*2, kernel_size=1, stride=1, padding=1),
+            Conv2d(n_filters*2, n_filters*2, kernel_size=1, stride=1),
             nn.BatchNorm2d(n_filters*2),
             nn.ReLU(inplace=True),
-            Conv2d(n_filters*2, num_classes, kernel_size=1, stride=1, padding=1),
+            Conv2d(n_filters*2, num_classes, kernel_size=1, stride=1),
             nn.ReLU(inplace=True)
         )
-        self.classifier = nn.AvgPool2d(12)
+        self.classifier = nn.AvgPool2d(8)
 
     def forward(self, x):
         x = self.features(x)
