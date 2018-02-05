@@ -192,3 +192,28 @@ After doing all this the only difference between our code and the original
 is the use of `clip_var`. It's only used in the first layer in the original
 code, but we set it to 0.5 and use it everywhere. Unsure why I set it to
 0.5, but it's much higher than the original one.
+
+Tried replacing the Linear layers with Conv2D layers and the network starts
+to yield NaNs at around epoch 40. So, used the same solution as before and
+added gradient clipping (clamp to -0.2, 0.2). It's strange, but the
+noise distribution is parameterised along the input dimensions for the
+linear layer and the output dimensions for the conv2d layer. I'm not sure
+why this is. I think it's an arbitrary decision, but I'm not sure. I would
+have initially expected that a 1x1 convolution over a 1x1 activation map
+with a number of channels would act the same as a linear layer with the
+same parameters, but this doesn't appear to be the case in this code.
+
+Got worse results as well:
+
+```
+Compressing the architecture will decrease the model by a factor of 2.9.
+Making use of weight uncertainty can reduce the model by a factor of 11.9.
+Test error after with reduced bit precision:
+Test loss: 0.0846, Accuracy: 9742/10000 (97.42%)
+```
+
+
+|First layer weights |Second Layer weights|
+| :------ |:------: |
+|![](images/weight0_e3.gif)|![](images/weight1_e3.gif)|
+
