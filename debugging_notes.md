@@ -174,3 +174,21 @@ changes to the interface I introduced:
 | :------ |:------: |
 |![](images/weight0_e1.gif)|![](images/weight1_e1.gif)|
 
+Forgot to note the final test loss etc this time. Ran again after switching
+to use our kl divergence interface. Got the following.
+
+```
+Compressing the architecture will decrease the model by a factor of 6.9.
+Making use of weight uncertainty can reduce the model by a factor of 27.6.
+Test error after with reduced bit precision:
+Test loss: 0.0814, Accuracy: 9757/10000 (97.57%)
+```
+
+|First layer weights |Second Layer weights|
+| :------ |:------: |
+|![](images/weight0_e2.gif)|![](images/weight1_e2.gif)|
+
+After doing all this the only difference between our code and the original
+is the use of `clip_var`. It's only used in the first layer in the original
+code, but we set it to 0.5 and use it everywhere. Unsure why I set it to
+0.5, but it's much higher than the original one.

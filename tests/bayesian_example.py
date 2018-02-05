@@ -54,6 +54,17 @@ from models.bayesian_utils import compute_compression_rate, \
 N = 60000.  # number of data points in the training set
 
 
+def kl_divergence(model):
+    """Parses model for layers with a kl_divergence method and aggregates their
+    results."""
+    KLD = 0.
+    for m in model.modules():
+        # recursive walk through all modules
+        if hasattr(m, 'kl_divergence'):
+            KLD += m.kl_divergence()
+    return KLD
+
+
 def main():
     # import data
     kwargs = {'num_workers': 1, 'pin_memory': True} if FLAGS.cuda else {}
@@ -116,12 +127,6 @@ def main():
                 weight_masks.append(weight_mask.astype(np.float))
             return weight_masks
 
-        def kl_divergence(self):
-            KLD = 0
-            for layer in self.kl_list:
-                KLD += layer.kl_divergence()
-            return KLD
-
     # init model
     model = Net()
     if FLAGS.cuda:
@@ -149,7 +154,7 @@ def main():
             data, target = Variable(data), Variable(target)
             optimizer.zero_grad()
             output = model(data)
-            loss = objective(output, target, model.kl_divergence())
+            loss = objective(output, target, kl_divergence(model))
             loss.backward()
             optimizer.step()
             # clip the variances after each step
@@ -194,7 +199,9 @@ def main():
     # compute compression rate and new model accuracy
     layers = [model.fc1, model.fc2, model.fc3]
     thresholds = FLAGS.thresholds
-    compute_compression_rate(layers, model.get_masks(thresholds))
+    CR_architecture, CR_fast_inference = compute_compression_rate(layers, model.get_masks(thresholds))
+    print("Compressing the architecture will decrease the model by a factor of %.1f." % (CR_architecture))
+    print("Making use of weight uncertainty can reduce the model by a factor of %.1f." % (CR_fast_inference))
 
     print("Test error after with reduced bit precision:")
 
