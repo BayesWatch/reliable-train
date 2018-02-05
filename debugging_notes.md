@@ -158,9 +158,6 @@ It also produces the following images:
 
 ![](images/pixel_original.gif)
 
-
-
-
 |First layer weights |Second Layer weights|
 | :------ |:------: |
 |![](images/weight0_e_original.gif)|![](images/weight1_e_original.gif)|
@@ -170,4 +167,10 @@ repo](https://github.com/KarenUllrich/Tutorial_BayesianCompressionForDL) it
 seems like we should probably run this for a bit longer. After 100 epochs
 the results are clear.
 
+Running for 100 epochs using our layer definitions, but none of the other
+changes to the interface I introduced:
+
+|First layer weights |Second Layer weights|
+| :------ |:------: |
+|![](images/weight0_e1.gif)|![](images/weight1_e1.gif)|
 
