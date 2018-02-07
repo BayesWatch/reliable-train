@@ -54,10 +54,11 @@ class Checkpoint(object):
         optimizer: optimizer to use with this model.
     """
     def __init__(self, model, initial_lr, lr_decay, minibatch_size,
-            lr_schedule, checkpoint_loc, log_loc, optimizer, verbose=False,
-            multi_gpu=False, l1_factor=0., l2_factor=None,
+            lr_schedule, checkpoint_loc, log_loc, optimizer, config_id,
+            verbose=False, multi_gpu=False, l1_factor=0., l2_factor=None,
             CriterionConstructor=nn.CrossEntropyLoss, lr_period=60.,
             clip_grads_at=None):
+        self.config_id = config_id
         self.optimizer = optimizer
         self.v = verbose
         self.multi_gpu = multi_gpu
@@ -121,7 +122,7 @@ class Checkpoint(object):
             'loss': loss,
             'epoch': epoch}
 
-        filename = format_filename(self.initial_lr, self.lr_decay, self.minibatch_size, acc, loss, epoch)
+        filename = format_filename(self.config_id, acc, loss, epoch)
         save_path = os.path.join(self.checkpoint_loc, filename)
         torch.save(state, save_path)
         return save_path 
@@ -296,8 +297,8 @@ def set_optimizer_lr(optimizer, lr):
     return optimizer
 
 
-def format_filename(lr, decay, minibatch_size, acc, loss, epoch):
-    fname_string = format_settings_str(lr, decay, minibatch_size, acc, loss, epoch)
+def format_filename(config_id, acc, loss, epoch):
+    fname_string = "%s_"%config_id + format_settings_str(acc, loss, epoch)
     return fname_string+".t7"
 
 

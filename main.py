@@ -158,8 +158,8 @@ def main(args):
     else:
         optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=args.l2)
 
-    checkpoint = Checkpoint(model, lr, lr_decay, minibatch,
-            schedule, checkpoint_loc, log_loc, verbose=args.v,
+    checkpoint = Checkpoint(model, lr, lr_decay, minibatch, schedule,
+            checkpoint_loc, log_loc, args.config_id, verbose=args.v,
             multi_gpu=args.multi_gpu, l1_factor=args.l1, l2_factor=args.l2,
             optimizer=optimizer, lr_period=lr_period)
 
