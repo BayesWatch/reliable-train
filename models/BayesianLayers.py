@@ -183,9 +183,11 @@ class LinearGroupNJ(nn.Module):
 
     def get_mask(self):
         # return the mask on the weight given the threshold and log_var we have
-        log_alpha = self.get_log_dropout_rates().cpu().data.numpy()
+        is_cuda = self.weight_mu.data.is_cuda
+        log_alpha = self.get_log_dropout_rates().cpu().data.numpy() if is_cuda else self.get_log_dropout_rates().data.numpy()
         mask = log_alpha < self.threshold
-        weight_mask = np.ones_like(self.weight_mu.data.numpy())*mask.reshape(-1,1)
+        w_mu = self.weight_mu.data.cpu() if is_cuda else self.weight_mu.data
+        weight_mask = np.ones_like(w_mu.numpy())*mask.reshape(1,-1)
         return weight_mask
 
     def __repr__(self):
