@@ -382,8 +382,8 @@ class LinearGroupNJ(_ConvNdGroupNJ):
                                    self.padding, self.dilation, self.groups)
         # compute z
         # note that we reparametrise according to [2] Eq. (11) (not [1])
-        z = reparameterize(self.z_mu.repeat(batch_size, 1, 1), self.z_logvar.repeat(batch_size, 1, 1),
-                          sampling=self.training)
+        z = reparameterize(self.z_mu.repeat(batch_size, 1), self.z_logvar.repeat(batch_size, 1),
+                           sampling=self.training)
         z = z[:, :, None]
 
         out = reparameterize(mu_activations * z, (var_activations * z.pow(2)).log(), sampling=self.training)
