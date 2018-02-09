@@ -35,10 +35,11 @@ signal.signal(signal.SIGTERM, sigterm_handler)
 
 def parse(to_parse=None):
     parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training\nlearning rate will decay every 60 epochs')
-    parser.add_argument('config_id', type=str, help='config identity str, parsed for lr, lr_decay and minibatch size, looks like: "<lr>_<lr_decay>"')
+    parser.add_argument('config_id', type=str, help='config identity str, parsed for kl_weight, looks like: "<kl_weight>"')
     parser.add_argument('--scratch', '-s', default=os.environ.get('SCRATCH',os.getcwd()), help='place to store data')
     parser.add_argument('--minibatch', '-M', type=int, default=64, help='minibatch size')
-    parser.add_argument('--l2', default=5e-4, type=float, help='l2 regularisation factor')
+    parser.add_argument('--lr', default=1e-3, type=float, help='Adam learning rate')
+    parser.add_argument('--lr_decay', default=0.2, type=float, help='Adam learning rate decay factor')
     parser.add_argument('--epochs', '-N', default=180, help='number of epochs to train for')
     parser.add_argument('--gpu', default=0, help='index of gpu to use')
     parser.add_argument('--multi_gpu', action='store_true', help='use all available gpus')
@@ -59,14 +60,12 @@ def run_identity(argv):
     return myhost + format_model_tag(args.model, args.model_multiplier)
 
 def get_random_config_id(rng):
-    learning_rate = np.exp(rng.uniform(low=np.log(0.01), high=np.log(0.4)))
-    lr_decay = rng.uniform(low=0., high=0.5)
-    config_id = format_settings_str(learning_rate, lr_decay)
+    kl_weight = np.exp(rng.uniform(low=np.log(1e-4), high=np.log(1.0)))
+    config_id = format_settings_str(learning_rate)
     return config_id
 
 def get_config(config_id):
-    config = config_id.split("_")
-    return float(config[0]), float(config[1])
+    return float(config_id)
 
 def format_model_tag(model, model_multiplier):
     if 'resnet' in model:
@@ -107,7 +106,7 @@ def main(args):
     n_gpus = torch.cuda.device_count()
 
     # parse out config
-    lr, lr_decay = get_config(args.config_id)
+    kl_weight = get_config(args.config_id)
 
     # load data
     trainloader, valloader, testloader = cifar10(args.scratch, args.minibatch, verbose=args.v)
@@ -152,7 +151,7 @@ def main(args):
     else:
         raise NotImplementedError("Don't know what model %s should mean."%model_tag)
 
-    optimizer= optim.Adam(model.parameters(), lr=lr)
+    optimizer= optim.Adam(model.parameters(), lr=args.lr)
 
     discrimination_loss = nn.functional.cross_entropy
 
@@ -168,7 +167,7 @@ def main(args):
             variational_bound = discrimination_error + self.weight*kl.cuda()/self.N
             return variational_bound.cuda()
 
-    checkpoint = Checkpoint(model, lr, lr_decay, args.minibatch, schedule,
+    checkpoint = Checkpoint(model, args.lr, args.lr_decay, args.minibatch, schedule,
             checkpoint_loc, log_loc, optimizer, args.config_id, verbose=args.v,
             multi_gpu=args.multi_gpu, l1_factor=0., CriterionConstructor=ELBO,
             clip_grads_at=0.2)
@@ -180,7 +179,9 @@ def main(args):
         batch_idx = 0
         train_loss = 0.
         for inputs, targets in trainloader:
-            checkpoint.criterion.weight = min(args.kl_weight, float(checkpoint.minibatch_idx)/(len(trainloader)*4))
+            # hardcode 4 epochs of warmup
+            checkpoint.criterion.weight = min(kl_weight,
+                    float(checkpoint.minibatch_idx)/(len(trainloader)*4.))
 
             batch_idx += 1
             loss = checkpoint.propagate(inputs, targets, batch_idx, should_update=True)
