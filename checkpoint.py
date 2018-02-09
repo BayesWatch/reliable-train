@@ -88,16 +88,15 @@ class Checkpoint(object):
             os.makedirs(self.checkpoint_loc)
 
         # look for checkpoints with these settings
-        existing = existing_checkpoints(self.checkpoint_loc)
+        existing = existing_checkpoints(self.checkpoint_loc, self.config_id)
         self.best_saved = {'loss':100.0, 'not_found': True} # in case there are no saves
         self.most_recent_saved = {'epoch':0, 'not_found': True}
         for e in existing:
-            if self.setting_str == "_".join(e[0]):
-                if e[1]['loss'] < self.best_saved['loss']:
-                    self.best_saved = e[1]
-                if e[1]['epoch'] > self.most_recent_saved['epoch']:
-                    self.most_recent_saved = e[1]
-                    self.epoch = self.most_recent_saved['epoch']
+            if e[1]['loss'] < self.best_saved['loss']:
+                self.best_saved = e[1]
+            if e[1]['epoch'] > self.most_recent_saved['epoch']:
+                self.most_recent_saved = e[1]
+                self.epoch = self.most_recent_saved['epoch']
 
         # count minibatches in total
         self.minibatch_idx = 0
@@ -151,6 +150,9 @@ class Checkpoint(object):
             example_idx = self.minibatch_idx*self.minibatch_size
             self.summary_writer.add_scalar('validation/loss', loss, example_idx)
             self.summary_writer.add_scalar('validation/accuracy', acc, example_idx)
+            net_sparsity = sparsity(self.net if not isinstance(self.net,
+                                    torch.nn.DataParallel) else self.net.module)
+            self.summary_writer.add_scalar('train/sparsity', net_sparsity, example_idx)
 
     def load_recent(self):
         # loads most recent model
@@ -255,9 +257,6 @@ class Checkpoint(object):
             self.summary_writer.add_scalar('train/loss', loss, example_idx)
             self.summary_writer.add_scalar('train/accuracy', acc, example_idx)
             self.summary_writer.add_scalar('train/learning_rate', lr, example_idx)
-            net_sparsity = sparsity(self.net if not isinstance(self.net,
-                                    torch.nn.DataParallel) else self.net.module)
-            self.summary_writer.add_scalar('train/sparsity', net_sparsity, example_idx)
             # if we've reached a high enough batch then sparsify (if the optimizer can)
             if hasattr(self.optimizer, 'sparsify'):
                 self.sparsify(batch_index)
@@ -266,10 +265,8 @@ class Checkpoint(object):
 
     def progress(self):
         acc = 100.*self.correct/self.total
-        net_sparsity = sparsity(self.net if not isinstance(self.net,
-            torch.nn.DataParallel) else self.net.module)
-        return '| %i | %.3f | %.3f%% | %.3f |'\
-            % (self.epoch, np.mean(self.accum_loss), acc, net_sparsity)
+        return '| %i | %.3f | %.3f%% |'\
+            % (self.epoch, np.mean(self.accum_loss), acc)
 
     def clear(self):
         del self.net
@@ -278,15 +275,18 @@ class Checkpoint(object):
         return self.setting_str
 
 
-def existing_checkpoints(checkpoint_loc):
+def existing_checkpoints(checkpoint_loc, config_id):
     # should return dictionary of settings containing file locations and validation accuracies
     checkpoint_filenames = os.listdir(checkpoint_loc)
     checkpoint_filenames = [cf for cf in checkpoint_filenames if '.t7' in cf]
     existing = []
     for n in checkpoint_filenames:
-        lr, decay, minibatch_size, acc, loss, epoch = n[:-3].split("_")
-        existing.append(((lr, decay, minibatch_size), {'acc':float(acc), 'loss':float(loss),
-            'abspath':os.path.join(checkpoint_loc, n), 'epoch': int(epoch)}))
+        components = n[:-3].split("_")
+        acc, loss, epoch = components[-3:]
+        file_config_id = components[:-3][0] if len(components[:-3]) == 1 else "_".join(components[:-3])
+        if self.config_id == file_config_id:
+            existing.append({'acc':float(acc), 'loss':float(loss),
+                'abspath':os.path.join(checkpoint_loc, n), 'epoch': int(epoch)})
     return existing
 
 
@@ -339,9 +339,17 @@ def l1_loss(x):
 def sparsity(model):
     total = 0
     active = 0
-    for param in model.parameters():
-        active += (torch.abs(param) > 1e-3).float().sum().data.cpu().numpy()
-        total += reduce(lambda a,b: a*b, param.size()) # no I couldn't think of a better way
+    for module in model.modules():
+        # if module has masks to use then use them
+        if hasattr(module, 'get_mask'):
+            mask = module.get_mask()
+        for param in module.parameters():
+            a = (torch.abs(param) > 1e-3).float().data.cpu().numpy()
+            if param is module.__dict__.get('weight_mu', None):
+                active += (a*mask).sum()
+            else:
+                active += a.sum()
+            total += reduce(lambda a,b: a*b, param.size()) # no I couldn't think of a better way
     return float((active/total))
 
 if __name__ == '__main__':
