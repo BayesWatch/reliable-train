@@ -77,7 +77,7 @@ class _ConvNdGroupNJ(nn.Module):
     """
     def __init__(self, in_channels, out_channels, kernel_size, stride, padding,
             dilation, transposed, output_padding, groups, bias, init_weight,
-            init_bias, clip_var=0.5, threshold=-3.):
+            init_bias, clip_var=None, threshold=-3.):
         super(_ConvNdGroupNJ, self).__init__()
         if in_channels % groups != 0:
             raise ValueError('in_channels must be divisible by groups')
@@ -190,8 +190,9 @@ class _ConvNdGroupNJ(nn.Module):
         log_alpha = self.get_log_dropout_rates().cpu().data.numpy()
         mask = log_alpha < self.threshold
         #print(max(log_alpha), (1 - mask).sum())
-        weight_mask = np.ones_like(self.weight_mu.data.cpu().numpy())*mask.reshape(-1,1,1,1)
-        return weight_mask
+        w_mu = self.weight_mu.data.cpu().numpy()
+        weight_mask = np.ones_like(w_mu)*mask.reshape(-1,1,1,1)
+        return weight_mask.squeeze()
 
     def __repr__(self):
         s = ('{name}({in_channels}, {out_channels}, kernel_size={kernel_size}'
@@ -215,7 +216,7 @@ class Conv1dGroupNJ(_ConvNdGroupNJ):
     """
 
     def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0, dilation=1, groups=1, bias=True,
-                 init_weight=None, init_bias=None, clip_var=0.5):
+                 init_weight=None, init_bias=None, clip_var=None):
         kernel_size = utils._single(kernel_size)
         stride = utils._single(stride)
         padding = utils._single(padding)
@@ -257,7 +258,7 @@ class Conv2dGroupNJ(_ConvNdGroupNJ):
     """
 
     def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0, dilation=1, groups=1, bias=True,
-                 init_weight=None, init_bias=None, clip_var=0.5, threshold=-3.):
+                 init_weight=None, init_bias=None, clip_var=None, threshold=-3.):
         kernel_size = utils._pair(kernel_size)
         stride = utils._pair(stride)
         padding = utils._pair(padding)
@@ -299,7 +300,7 @@ class Conv3dGroupNJ(_ConvNdGroupNJ):
     """
 
     def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0, dilation=1, groups=1, bias=True,
-                 init_weight=None, init_bias=None, clip_var=0.5):
+                 init_weight=None, init_bias=None, clip_var=None):
         kernel_size = utils._triple(kernel_size)
         stride = utils._triple(stride)
         padding = utils._triple(padding)
@@ -350,7 +351,7 @@ class LinearGroupNJ(_ConvNdGroupNJ):
     """
 
     def __init__(self, in_features, out_features, init_weight=None,
-            init_bias=None, clip_var=0.5, threshold=-3.):
+            init_bias=None, clip_var=None, threshold=-3.):
         in_channels, out_channels = in_features, out_features
         kernel_size = utils._single(1)
         stride = utils._single(1)
