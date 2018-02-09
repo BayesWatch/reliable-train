@@ -92,26 +92,30 @@ class Checkpoint(object):
         self.best_saved = {'loss':100.0, 'not_found': True} # in case there are no saves
         self.most_recent_saved = {'epoch':0, 'not_found': True}
         for e in existing:
-            if e[1]['loss'] < self.best_saved['loss']:
-                self.best_saved = e[1]
-            if e[1]['epoch'] > self.most_recent_saved['epoch']:
-                self.most_recent_saved = e[1]
+            if e['loss'] < self.best_saved['loss']:
+                self.best_saved = e
+            if e['epoch'] > self.most_recent_saved['epoch']:
+                self.most_recent_saved = e
                 self.epoch = self.most_recent_saved['epoch']
 
         # count minibatches in total
         self.minibatch_idx = 0
 
+        # initialise network
+        self.net = model
+
         if not self.best_saved.get('not_found', False) and self.most_recent_saved.get('not_found', False):
+            # if we only have best saved, then it's also our most recent
             self.most_recent_saved = self.best_saved
         elif self.best_saved.get('not_found', False):
-            # initialise network
-            self.net = model
-
             # save initialised checkpoint
             save_path = self.save(0.0, 100.0, 0)
             self.best_saved = {'acc':0.0, 'abspath':save_path, 'epoch': 0, 'loss': 100.0}
             self.most_recent_saved = self.best_saved
             self.epoch = 0
+
+        # load the most recent
+        acc, loss, self.epoch = self.load_recent()
 
     def save(self, acc, loss, epoch):
         state = {
@@ -161,15 +165,15 @@ class Checkpoint(object):
         state = torch.load(self.most_recent_saved['abspath'])
         opt_state = state['optimizer_state']
         self.optimizer.load_state_dict(opt_state)
-        net = self.net.load_state_dict(state['net'])
-        return net, state['acc'], state['loss'], state['epoch']
+        self.net.load_state_dict(state['net'])
+        return state['acc'], state['loss'], state['epoch']
 
     def init_for_epoch(self, gpu_index, should_update, epoch_size=None):
         self.gpu_index = gpu_index
 
         # load most recent params if we have none
         if 'net' not in self.__dict__:
-            self.net, acc, loss, self.epoch = self.load_recent()
+            acc, loss, self.epoch = self.load_recent()
 
         if self.multi_gpu and not isinstance(self.net, torch.nn.DataParallel):
             self.net.cuda(self.gpu_index)
@@ -284,7 +288,7 @@ def existing_checkpoints(checkpoint_loc, config_id):
         components = n[:-3].split("_")
         acc, loss, epoch = components[-3:]
         file_config_id = components[:-3][0] if len(components[:-3]) == 1 else "_".join(components[:-3])
-        if self.config_id == file_config_id:
+        if config_id == file_config_id:
             existing.append({'acc':float(acc), 'loss':float(loss),
                 'abspath':os.path.join(checkpoint_loc, n), 'epoch': int(epoch)})
     return existing
