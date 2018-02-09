@@ -217,3 +217,18 @@ Test loss: 0.0846, Accuracy: 9742/10000 (97.42%)
 | :------ |:------: |
 |![](images/weight0_e3.gif)|![](images/weight1_e3.gif)|
 
+9th February 2018
+-----------------
+
+Ages ago, while debugging I set the `clip_var` to 0.5 in an effort to
+reduce the problem with NaNs. Seems like this may be unnecessary, because I
+tried removing it altogether and the results we get are a little better on
+the tiny all convolutional network. We no longer see accuracy go down after
+warmup (although it is noisy). Performance is still not great, but
+convergence is much nicer, and may be tunable to work a lot better. Could
+be that it would still break once we try this on resnet50, then it may be
+necessary to set it to something, but maybe larger than 0.5 would be a good
+idea.
+
+
+
