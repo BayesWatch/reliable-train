@@ -65,7 +65,3 @@ done about it. This is not a black box optimiser, so it has to make some
 assumptions about the box being optimised. For a concrete example, see the
 script `dummy.py` implementing a dummy experiment for optimisation. 
 
-## Recommended functionality
-
-In addition to the required functionality above, there are a few things
-that are worth considering when running experiments with hyperband.
