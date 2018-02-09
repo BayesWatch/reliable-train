@@ -35,7 +35,7 @@ minimise.
 describes a particular randomly sampled configuration. For example, it
 could produce `lr:0.01.batch_size:256`, because we can recover those
 hyperparameter settings from this string using...
-6. You script must implement a function called `run_identity` that takes
+6. Your script must implement a function called `run_identity` that takes
 any optional arguments your script could receive, and returns a string
 uniquely defining these. This allows your script to implement more than one
 possible hyperband experiment. For example, if you would like to run a
