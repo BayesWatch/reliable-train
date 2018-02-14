@@ -158,9 +158,6 @@ It also produces the following images:
 
 ![](images/pixel_original.gif)
 
-
-
-
 |First layer weights |Second Layer weights|
 | :------ |:------: |
 |![](images/weight0_e_original.gif)|![](images/weight1_e_original.gif)|
@@ -169,5 +166,69 @@ From the [readme in the original
 repo](https://github.com/KarenUllrich/Tutorial_BayesianCompressionForDL) it
 seems like we should probably run this for a bit longer. After 100 epochs
 the results are clear.
+
+Running for 100 epochs using our layer definitions, but none of the other
+changes to the interface I introduced:
+
+|First layer weights |Second Layer weights|
+| :------ |:------: |
+|![](images/weight0_e1.gif)|![](images/weight1_e1.gif)|
+
+Forgot to note the final test loss etc this time. Ran again after switching
+to use our kl divergence interface. Got the following.
+
+```
+Compressing the architecture will decrease the model by a factor of 6.9.
+Making use of weight uncertainty can reduce the model by a factor of 27.6.
+Test error after with reduced bit precision:
+Test loss: 0.0814, Accuracy: 9757/10000 (97.57%)
+```
+
+|First layer weights |Second Layer weights|
+| :------ |:------: |
+|![](images/weight0_e2.gif)|![](images/weight1_e2.gif)|
+
+After doing all this the only difference between our code and the original
+is the use of `clip_var`. It's only used in the first layer in the original
+code, but we set it to 0.5 and use it everywhere. Unsure why I set it to
+0.5, but it's much higher than the original one.
+
+Tried replacing the Linear layers with Conv2D layers and the network starts
+to yield NaNs at around epoch 40. So, used the same solution as before and
+added gradient clipping (clamp to -0.2, 0.2). It's strange, but the
+noise distribution is parameterised along the input dimensions for the
+linear layer and the output dimensions for the conv2d layer. I'm not sure
+why this is. I think it's an arbitrary decision, but I'm not sure. I would
+have initially expected that a 1x1 convolution over a 1x1 activation map
+with a number of channels would act the same as a linear layer with the
+same parameters, but this doesn't appear to be the case in this code.
+
+Got worse results as well:
+
+```
+Compressing the architecture will decrease the model by a factor of 2.9.
+Making use of weight uncertainty can reduce the model by a factor of 11.9.
+Test error after with reduced bit precision:
+Test loss: 0.0846, Accuracy: 9742/10000 (97.42%)
+```
+
+
+|First layer weights |Second Layer weights|
+| :------ |:------: |
+|![](images/weight0_e3.gif)|![](images/weight1_e3.gif)|
+
+9th February 2018
+-----------------
+
+Ages ago, while debugging I set the `clip_var` to 0.5 in an effort to
+reduce the problem with NaNs. Seems like this may be unnecessary, because I
+tried removing it altogether and the results we get are a little better on
+the tiny all convolutional network. We no longer see accuracy go down after
+warmup (although it is noisy). Performance is still not great, but
+convergence is much nicer, and may be tunable to work a lot better. Could
+be that it would still break once we try this on resnet50, then it may be
+necessary to set it to something, but maybe larger than 0.5 would be a good
+idea.
+
 
 

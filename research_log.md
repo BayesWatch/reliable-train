@@ -299,6 +299,29 @@ but it seems to be around good enough, and it's not overfitting:
 Opening up that saved model and it appears the variances of the posteriors
 are wrong. These results are suspicious until I get to the bottom of that.
 
+8th February 2018
+-----------------
+
+Running resnet50 with Bayesian Compression Adam is able to optimise the
+loss OK, but the loss is so large compared to the cross-entropy loss the
+network barely cares about classifying. It might work if we change the
+weight on the prior to be much lower, but unsure. 
+
+The training accuracy was only 15%, but the sparsity achieved was about a
+10 times compression. Although, that's not naive sparsity, that's
+actually removing whole filters. So trivially exploitable. But, the network
+is useless, so it's not very important.
+
+9th February 2018
+-----------------
+
+Homogenised the layers so that the Linear layer really is just a 1D conv
+over a dimension of size 1 (equivalent to FC). Avoids the problems with
+different parameterisations. Seems to also help with convergence, because
+now a resnet50 doesn't completely fall apart. During training, at the start
+when the warmup is still increasing the weight of the regularisation term,
+the accuracy of the network is increasing.
+
 13th February 2018
 ------------------
 

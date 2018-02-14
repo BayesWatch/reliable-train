@@ -22,6 +22,7 @@ from checkpoint import Checkpoint, format_settings_str, sparsity
 from data import cifar10
 from seppuku import exit_after
 from models.BayesianLayers import LinearGroupNJ, Conv2dGroupNJ, isnt_nan
+from models.bayesian_utils import compute_compression_rate
 
 from itertools import combinations
 
@@ -50,47 +51,6 @@ def parse(to_parse=None):
     args = parser.parse_args(to_parse)
     return args
 
-# build a simple MLP
-class Net(nn.Module):
-    def __init__(self):
-        super(Net, self).__init__()
-        # activation
-        self.relu = nn.ReLU()
-        # layers
-        self.fc1 = LinearGroupNJ(32 * 32, 300, clip_var=0.04)
-        self.fc2 = LinearGroupNJ(300, 100)
-        self.fc3 = LinearGroupNJ(100, 10)
-        # layers including kl_divergence
-        self.kl_list = [self.fc1, self.fc2, self.fc3]
-
-    def forward(self, x):
-        x = x.mean(1)
-        x = x.view(-1, 32 * 32)
-        x = self.relu(self.fc1(x))
-        x = self.relu(self.fc2(x))
-        return self.fc3(x)
-
-    def get_masks(self,thresholds):
-        weight_masks = []
-        mask = None
-        for i, (layer, threshold) in enumerate(zip(self.kl_list, thresholds)):
-            # compute dropout mask
-            if mask is None:
-                log_alpha = layer.get_log_dropout_rates().cpu().data.numpy()
-                mask = log_alpha < threshold
-            else:
-                mask = np.copy(next_mask)
-            try:
-                log_alpha = layers[i + 1].get_log_dropout_rates().cpu().data.numpy()
-                next_mask = log_alpha < thresholds[i + 1]
-            except:
-                # must be the last mask
-                next_mask = np.ones(10)
-
-            weight_mask = np.expand_dims(mask, axis=0) * np.expand_dims(next_mask, axis=1)
-            weight_masks.append(weight_mask.astype(np.float))
-        return weight_masks
-
 # define run_identity for hyperband
 def run_identity(argv):
     argv = ["dummy_config"] + argv # have to supply something or hit an error
@@ -113,7 +73,7 @@ def format_model_tag(model, model_multiplier):
         model_tag = model+".%02d"%model_multiplier
     else:
         model_tag = model
-    model_tag += '.bayes.0p1'
+    model_tag += '.bayes'
     return model_tag
 
 def kl_divergence(model):
@@ -205,13 +165,13 @@ def main(args):
         def __call__(self, outputs, targets):
             kl = kl_divergence(model)
             discrimination_error = discrimination_loss(outputs, targets)
-            variational_bound = discrimination_error + self.weight*kl/self.N
+            variational_bound = discrimination_error + self.weight*kl.cuda()/self.N
             return variational_bound.cuda()
 
     checkpoint = Checkpoint(model, lr, lr_decay, args.minibatch, schedule,
-            checkpoint_loc, log_loc, optimizer, verbose=args.v,
-            multi_gpu=args.multi_gpu, l1_factor=0.,
-            CriterionConstructor=ELBO, clip_grads_at=0.2)
+            checkpoint_loc, log_loc, optimizer, args.config_id, verbose=args.v,
+            multi_gpu=args.multi_gpu, l1_factor=0., CriterionConstructor=ELBO,
+            clip_grads_at=0.2)
 
     #@exit_after(240)
     def train(checkpoint, trainloader):
@@ -253,7 +213,18 @@ def main(args):
                 progress_bar(batch_idx, len(loader), progress_str)
         if save:
             checkpoint.save_recent()
+
+        layers = [m for m in model.modules() if hasattr(m, 'get_mask')]
+        masks  = [l.get_mask() for l in layers]
+
+        # log the current compression rates
+        example_idx = checkpoint.minibatch_idx*checkpoint.minibatch_size
+        CR_architecture, CR_fast_inference = compute_compression_rate(layers, masks)
+        checkpoint.summary_writer.add_scalar('validation/sparsity_compression', CR_architecture, example_idx)
+        checkpoint.summary_writer.add_scalar('validation/quant_compression', CR_fast_inference, example_idx)
+
         return train_loss/batch_idx
+
 
     for epoch in range(int(args.epochs) - checkpoint.epoch):
         # train and validate this checkpoint
@@ -274,6 +245,7 @@ def main(args):
                   "Test loss: %.3f\n"%test_loss+
                   "Test accuracy: %.3f"%test_acc)
             return None
+        
     print("%f"%checkpoint.most_recent_saved['loss'])
 
 if __name__ == '__main__':
