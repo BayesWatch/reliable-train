@@ -61,7 +61,7 @@ def run_identity(argv):
 
 def get_random_config_id(rng):
     kl_weight = np.exp(rng.uniform(low=np.log(1e-4), high=np.log(1.0)))
-    config_id = format_settings_str(learning_rate)
+    config_id = format_settings_str(kl_weight)
     return config_id
 
 def get_config(config_id):
