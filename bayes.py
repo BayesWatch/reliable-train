@@ -20,7 +20,7 @@ import numpy as np
 from utils import ProgressBar, sigterm_handler, cleanup
 from checkpoint import Checkpoint, format_settings_str, sparsity
 from data import cifar10
-from seppuku import exit_after
+from safety import exit_after
 from models.BayesianLayers import LinearGroupNJ, Conv2dGroupNJ, isnt_nan
 from models.bayesian_utils import compute_compression_rate
 
