@@ -1,3 +1,4 @@
+
 '''Class to store model specifications and training details'''
 from __future__ import print_function
 
@@ -54,7 +55,7 @@ class Checkpoint(object):
         optimizer: optimizer to use with this model.
     """
     def __init__(self, model, initial_lr, lr_decay, minibatch_size,
-            lr_schedule, checkpoint_loc, log_loc, optimizer, config_id,
+            lr_schedule, checkpoint_loc, log_loc, config_id, optimizer,
             verbose=False, multi_gpu=False, l1_factor=0., l2_factor=None,
             CriterionConstructor=nn.CrossEntropyLoss, lr_period=60.,
             clip_grads_at=None):
@@ -249,10 +250,10 @@ class Checkpoint(object):
             self.optimizer.step()
             self.minibatch_idx += 1
 
-        loss = loss.data[0]
+        loss = loss.data.item()
         _, predicted = torch.max(outputs.data, 1)
         self.total += targets.size(0)
-        self.correct += predicted.eq(targets.data).cpu().sum()
+        self.correct += predicted.eq(targets.data).cpu().sum().item()
         self.accum_loss.append(loss)
 
         if should_update:
