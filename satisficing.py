@@ -19,7 +19,7 @@ import numpy as np
 from utils import ProgressBar, format_l2, sigterm_handler
 from checkpoint import Checkpoint, format_settings_str, sparsity
 from data import cifar10
-from seppuku import exit_after
+from safety import exit_after
 
 from itertools import combinations
 

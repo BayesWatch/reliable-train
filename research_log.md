@@ -322,4 +322,46 @@ now a resnet50 doesn't completely fall apart. During training, at the start
 when the warmup is still increasing the weight of the regularisation term,
 the accuracy of the network is increasing.
 
+13th February 2018
+------------------
+
+We have the following on the list of sparsity techniques to investigate,
+and we need to draw Pareto curves for each:
+
+1. L1 Regularisation - *implemented*
+2. Deep Compression - *implemented*
+3. Bayesian Compression - *implemented*
+4. Learning Structured Sparsity - **unconfirmed**
+5. Fisher Pruning - *almost implemented (Elliot)*
+
+All of these experiments need a certain amount of Hyperparameter tuning
+(especially Bayesian Compression). But, we don't have an infinite amount of
+time to run the experiments in. So, we need to figure out how this should
+work.
+
+It takes approximately 12 hours to run Hyperband with default settings
+training a vanilla resnet50. We can speed that up a bit by changing
+settings. It might be possible to push it down to 6 hours by reducing the
+max no. of epochs, reducing the number of settings tried etc. But, that is
+bad for the overall search.
+
+At minimum, the Pareto curve for each of these methods would have to have
+at least 3 points. So, in the above (ignoring that some of these methods
+take longer to run than others): 5*3*6 = 90 hours. So, for the minimum
+curves for each will take 90 hours.
+
+Maybe the best way to run this will therefore be to run Hyperband with 3
+points (settings for the level of sparsity) and optimize for performance at
+that point. That's easy for some of these methods, and more difficult for
+others. For example, in Bayesian compression I don't know how we should
+implement it.
+
+Also, it would be important to discriminate between structured and
+unstructured sparsity performance. Some methods just prune all parameters,
+others are able to prune whole channels/rows/columns. Those are *much*
+easier to take advantage of at test time. It will be interesting to see
+the difference in which method does this better.
+
+Once we have 3 points, it will be obvious which we need to add for each
+method to fill in gaps in the overall graph.
 
