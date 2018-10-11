@@ -52,8 +52,7 @@ dictionaries with the following attributes:
 
 * `'epoch'`: the number of epochs the model has been trained
 * `'acc'`: validation accuracy at that epoch
-* `'net'`: the network itself (would be better to use the state dict, [this
-is an issue][statedict])
+* `'net'`: the network state dictionary
 
 The filename of each checkpoint itself contains the hyperparameter settings
 and also contains the epoch and accuracy. These are given to an arbitrary
