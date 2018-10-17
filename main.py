@@ -30,7 +30,7 @@ signal.signal(signal.SIGTERM, sigterm_handler)
 
 def parse(to_parse=None):
     parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training\nlearning rate will decay every 60 epochs')
-    parser.add_argument('config_id', type=str, help='config identity str, parsed for lr, lr_decay and minibatch size, looks like: "<lr>_<lr_decay>_<minibatch_size>"')
+    parser.add_argument('config_id', type=str, help='config identity str, parsed for lr, lr_decay and minibatch size, looks like: "<lr>_<lr_decay>_<weight-decay>_<minibatch_size>"')
     parser.add_argument('--scratch', '-s', default=os.environ.get('SCRATCH',os.getcwd()), help='place to store data')
     #parser.add_argument('--lr', default=0.1, help='learning rate')
     parser.add_argument('--l1', default=0., type=float, help='l1 regularisation factor')
@@ -55,24 +55,26 @@ def run_identity(argv):
     argv = ["dummy_config"] + argv # have to supply something or hit an error
     args = parse(argv)
     myhost = os.uname()[1].split(".")[0] + "."
-    return myhost + format_model_tag(args.model, args.model_multiplier, args.l1, args.l2, args.deep_compression, args.sgdr)
+    return myhost + format_model_tag(args.model, args.model_multiplier, args.l1, args.deep_compression, args.sgdr)
 
 def get_random_config_id(rng):
     learning_rate = np.exp(rng.uniform(low=np.log(0.01), high=np.log(0.4)))
-    lr_decay = rng.uniform(low=0., high=0.5)
-    minibatch_size = 2**rng.randint(low=6, high=9)
-    config_id = format_settings_str(learning_rate, lr_decay, minibatch_size)
+    lr_decay = 0.2
+    #minibatch_size = rng.choice([128,256])
+    minibatch_size = 128
+    l2 = np.exp(rng.uniform(low=np.log(5e-6), high=np.log(1e-4)))
+    config_id = format_settings_str(learning_rate, lr_decay, l2, minibatch_size)
     return config_id
 
 def get_config(config_id):
     config = config_id.split("_")
-    return float(config[0]), float(config[1]), int(config[2])
+    return float(config[0]), float(config[1]), float(config[2]), int(config[3])
 
-def format_model_tag(model, model_multiplier, l1, l2, deep_compression, sgdr):
+def format_model_tag(model, model_multiplier, l1, deep_compression, sgdr):
     if 'resnet' in model:
-        model_tag = model+".%02d"%model_multiplier+format_l1(l1)+format_l2(l2)
+        model_tag = model+".%02d"%model_multiplier+format_l1(l1)
     else:
-        model_tag = model+format_l1(l1)+format_l2(l2)
+        model_tag = model+format_l1(l1)
     if deep_compression < 0.99:
         model_tag += '.dc_%05.3f'%deep_compression
     if sgdr:
@@ -90,12 +92,12 @@ def main(args):
     n_gpus = torch.cuda.device_count()
 
     # parse out config
-    lr, lr_decay, minibatch = get_config(args.config_id)
+    lr, lr_decay, l2, minibatch = get_config(args.config_id)
 
     trainloader, valloader, testloader = cifar10(args.scratch, minibatch, verbose=args.v)
 
     # Set where to save and load checkpoints, use model_tag for directory name
-    model_tag = format_model_tag(args.model, args.model_multiplier, args.l1, args.l2, args.deep_compression, args.sgdr)
+    model_tag = format_model_tag(args.model, args.model_multiplier, args.l1, args.deep_compression, args.sgdr)
     if args.v:
         print(model_tag)
 
@@ -143,10 +145,16 @@ def main(args):
     elif 'resnet' in model_tag:
         if '50' in model_tag:
             model = ResNet50(args.model_multiplier, nn.Conv2d, nn.Linear)
+        elif 'acdc' in model_tag:
+            model = ResNetACDC(args.model_multiplier)
+        else:
+            raise NotImplementedError("Don't know what model %s should mean."%model_tag)
     elif 'mobilenet' in model_tag:
         model = MobileNet()
-    elif 'allconv' in model_tag:
+    elif 'allconv' == model_tag.split(".")[0]:
         model = AllConv()
+    elif 'allconv_acdc' == model_tag.split(".")[0]:
+        model = AllConvACDC()
     else:
         raise NotImplementedError("Don't know what model %s should mean."%model_tag)
 
@@ -154,13 +162,13 @@ def main(args):
     if args.deep_compression < 0.99:
         from deep_compression import ExactSparsity
         optimizer = ExactSparsity(model.parameters(), args.deep_compression,
-                lr=lr, momentum=0.9, weight_decay=args.l2)
+                lr=lr, momentum=0.9, weight_decay=l2)
     else:
-        optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=args.l2)
+        optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=l2)
 
     checkpoint = Checkpoint(model, lr, lr_decay, minibatch, schedule,
             checkpoint_loc, log_loc, args.config_id, verbose=args.v,
-            multi_gpu=args.multi_gpu, l1_factor=args.l1, l2_factor=args.l2,
+            multi_gpu=args.multi_gpu, l1_factor=args.l1, l2_factor=l2,
             optimizer=optimizer, lr_period=lr_period)
 
     def train(checkpoint, trainloader):
@@ -216,7 +224,7 @@ if __name__ == '__main__':
     args = parse()
 
     # initialise logging
-    model_tag = format_model_tag(args.model, args.model_multiplier, args.l1, args.l2, args.deep_compression, args.sgdr)
+    model_tag = format_model_tag(args.model, args.model_multiplier, args.l1, args.deep_compression, args.sgdr)
     logging_loc = os.path.join(args.scratch, 'checkpoint', model_tag, 'errors.log')
     if not os.path.isdir(os.path.dirname(logging_loc)):
         os.makedirs(os.path.dirname(logging_loc))

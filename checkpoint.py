@@ -76,13 +76,13 @@ class Checkpoint(object):
         self.lr_decay = float(lr_decay)
         self.minibatch_size = int(minibatch_size)
         # string describing settings canonically
-        self.setting_str = format_settings_str(self.initial_lr, self.lr_decay, self.minibatch_size)
+        self.setting_str = config_id
         self.checkpoint_loc = checkpoint_loc
         # store learning rate schedule
         self.lr_schedule = lambda batch_index, period: lr_schedule(self.lr_decay, period, batch_index)
         
         # initialise summary writer, if we can
-        self.summary_writer = get_summary_writer(log_loc, [self.initial_lr, self.lr_decay, self.minibatch_size])
+        self.summary_writer = get_summary_writer(log_loc, self.config_id)
 
         # if checkpoint directory doesn't exist, make it
         if not os.path.isdir(self.checkpoint_loc):
@@ -163,7 +163,7 @@ class Checkpoint(object):
         # loads most recent model
         if self.v:
             print("Loading from %s"%self.most_recent_saved['abspath'])
-        state = torch.load(self.most_recent_saved['abspath'])
+        state = torch.load(self.most_recent_saved['abspath'], map_location=lambda storage, loc: storage)
         opt_state = state['optimizer_state']
         self.optimizer.load_state_dict(opt_state)
         self.net.load_state_dict(state['net'])
@@ -177,11 +177,11 @@ class Checkpoint(object):
             acc, loss, self.epoch = self.load_recent()
 
         if self.multi_gpu and not isinstance(self.net, torch.nn.DataParallel):
-            self.net.cuda(self.gpu_index)
+            self.net.to('cuda')
             self.net = torch.nn.DataParallel(self.net, device_ids=range(torch.cuda.device_count()))
             cudnn.benchmark = True
         elif not self.multi_gpu:
-            self.net.cuda(self.gpu_index)
+            self.net.to('cuda:%i'%self.gpu_index)
 
         # always set up criterion
         self.criterion = self.CriterionConstructor()
@@ -223,7 +223,8 @@ class Checkpoint(object):
                 raise ValueError("Model should not be in train mode if not updating parameters.")
 
         if self.use_cuda:
-            inputs, targets = inputs.cuda(self.gpu_index), targets.cuda(self.gpu_index)
+            device = 'cuda:%i'%self.gpu_index if self.gpu_index is not None else 'cuda'
+            inputs, targets = inputs.to(device), targets.to(device)
         if should_update:
             lr = self.lr_schedule_callback(batch_index)
             self.optimizer = set_optimizer_lr(self.optimizer, lr)
@@ -324,10 +325,9 @@ def format_settings_str(*settings):
 
 try:
     from tensorboardX import SummaryWriter
-    def get_summary_writer(log_loc, settings):
+    def get_summary_writer(log_loc, config_id):
         # save to subdir describing the hyperparam settings
-        dirname = format_settings_str(*settings)
-        return SummaryWriter(os.path.join(log_loc, dirname))
+        return SummaryWriter(os.path.join(log_loc, config_id))
 except ImportError:
     print("tensorboard-pytorch not detected, will not write plot logs anywhere")
     class DummyWriter(object):
@@ -335,7 +335,7 @@ except ImportError:
             return None
         def add_scalar(self, tag, scalar_value, global_step):
             return None
-    def get_summary_writer(log_loc, settings):
+    def get_summary_writer(log_loc, config_id):
         return DummyWriter(log_loc)
 
 def l1_loss(x):

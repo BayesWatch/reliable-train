@@ -10,3 +10,4 @@ from .mobilenet import *
 #from .butterfly import *
 #from .shufflenet import *
 from .tiny import *
+from .acdc import *

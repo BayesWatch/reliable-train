@@ -4,8 +4,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from torch.autograd import Variable
-
 
 class AllConv(nn.Module):
     """Not exactly the all convolutional network, but based on it."""
@@ -39,14 +37,18 @@ class AllConv(nn.Module):
             Conv2d(n_filters*2, n_filters*2, kernel_size=1, stride=1),
             nn.BatchNorm2d(n_filters*2),
             nn.ReLU(inplace=True),
-            Conv2d(n_filters*2, num_classes, kernel_size=1, stride=1),
+            Conv2d(n_filters*2, n_filters*2, kernel_size=1, stride=1),
             nn.ReLU(inplace=True)
         )
-        self.classifier = nn.AvgPool2d(8)
+
+        self.pool = nn.AvgPool2d(8)
+        self.classifier = nn.Linear(n_filters*2, 10)
 
     def forward(self, x):
         x = self.features(x)
-        x = self.classifier(x).view(-1, self.num_classes)
+        n, c, _, _ = x.size()
+        x = self.pool(x).view(n, c)
+        x = self.classifier(x)
         return x
 
 if __name__ == '__main__':
